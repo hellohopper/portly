@@ -20,6 +20,19 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Open / copy URL | Launch `localhost:<port>` in your browser, or right-click to copy the URL |
 | Theme toggle | System / Light / Dark, persisted across launches |
 | Active-port indicator | Green dot per row |
+| Search/filter | Matches port, process name, framework, project, and git branch |
+| Pin favorites | Pinned ports float to a "Pinned" section; the rest are grouped by project |
+| Notifications | Alerted when a new port starts listening, or a pinned port dies |
+| Docker awareness | Flags ports forwarded through Docker Desktop's host process |
+| Bulk actions | Select multiple ports and kill them in one action |
+| Auto-update check | In-app banner when a newer GitHub release is available |
+| Launch at Login | Toggle in Settings, backed by `SMAppService` |
+| Menu bar alert state | Icon tints red when a pinned port dies, clears once you open the menu |
+| Ignore list | Right-click a port to hide it (and its process) from the list going forward |
+| Export list | Save the current port list as JSON or CSV from Settings |
+| Quick restart | Kill + relaunch a process with its exact command line and working directory |
+| Custom hotkey | Rebind the global toggle shortcut (default ⌘⇧P) from Settings |
+| Per-port labels | Give any port a custom name (e.g. "staging API") that persists across launches |
 
 ## Download
 
