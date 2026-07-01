@@ -6,7 +6,29 @@ enum PortScanner {
         var results: [PortInfo] = []
         results.append(contentsOf: scan(protoFlag: "-iTCP", extraArgs: ["-sTCP:LISTEN"], proto: "TCP"))
         results.append(contentsOf: scan(protoFlag: "-iUDP", extraArgs: [], proto: "UDP"))
-        return dedupe(results)
+        return mergeSamePidAndPort(dedupe(results))
+    }
+
+    /// A process listening on both TCP and UDP for the same port shows up as two
+    /// otherwise-identical rows; merge those into one row with a combined proto label.
+    static func mergeSamePidAndPort(_ entries: [PortInfo]) -> [PortInfo] {
+        var order: [String] = []
+        var merged: [String: PortInfo] = [:]
+
+        for entry in entries {
+            let key = "\(entry.pid)-\(entry.port)"
+            if var existing = merged[key] {
+                let protocols = existing.proto.split(separator: "+").map(String.init)
+                if !protocols.contains(entry.proto) {
+                    existing.proto = (protocols + [entry.proto]).joined(separator: "+")
+                }
+                merged[key] = existing
+            } else {
+                merged[key] = entry
+                order.append(key)
+            }
+        }
+        return order.compactMap { merged[$0] }
     }
 
     /// lsof reports the same pid/port twice when a process listens on both IPv4 and IPv6

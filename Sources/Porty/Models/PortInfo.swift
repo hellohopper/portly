@@ -3,7 +3,7 @@ import Foundation
 struct PortInfo: Identifiable, Hashable {
     let pid: Int32
     let port: Int
-    let proto: String        // "TCP" or "UDP"
+    var proto: String        // "TCP", "UDP", or "TCP+UDP" once merged
     let processName: String
     let commandPath: String?
     var projectName: String?

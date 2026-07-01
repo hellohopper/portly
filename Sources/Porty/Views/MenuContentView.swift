@@ -75,7 +75,7 @@ private struct PortRow: View {
             }
             .buttonStyle(.borderless)
             .help("Reveal owning terminal")
-            if info.proto == "TCP" {
+            if info.proto.contains("TCP") {
                 Button(action: openInBrowser) {
                     Image(systemName: "safari")
                 }

@@ -41,4 +41,26 @@ struct PortScannerTests {
 
         #expect(PortScanner.dedupe(entries).count == 2)
     }
+
+    @Test func mergeSamePidAndPortCombinesProtocols() {
+        let entries = [
+            PortInfo(pid: 100, port: 53, proto: "TCP", processName: "dnsd", commandPath: nil),
+            PortInfo(pid: 100, port: 53, proto: "UDP", processName: "dnsd", commandPath: nil)
+        ]
+
+        let merged = PortScanner.mergeSamePidAndPort(entries)
+
+        #expect(merged.count == 1)
+        #expect(merged.first?.proto == "TCP+UDP")
+    }
+
+    @Test func mergeSamePidAndPortKeepsDifferentPidsOrPortsSeparate() {
+        let entries = [
+            PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil),
+            PortInfo(pid: 200, port: 3000, proto: "TCP", processName: "python", commandPath: nil),
+            PortInfo(pid: 100, port: 4000, proto: "TCP", processName: "node", commandPath: nil)
+        ]
+
+        #expect(PortScanner.mergeSamePidAndPort(entries).count == 3)
+    }
 }
