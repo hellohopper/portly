@@ -10,14 +10,25 @@ A native macOS menu bar app for tracking local port usage — see what's listeni
 - Kill a process, open `localhost:<port>` in your browser, or right-click to copy the URL
 - Green active-port indicator
 
-## Requirements
+## Download
+
+Grab the latest `Porty.dmg` from the [Releases page](https://github.com/hellohopper/Porty/releases/latest), open it, and drag `Porty.app` into `Applications`.
+
+> Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Porty.app` → **Open** → **Open** to bypass this once.
+
+## Build from Source
+
+### Requirements
 
 - macOS 13+
 - Xcode 15+ (or Command Line Tools) with the Swift 6 toolchain
 
-## Build & Run
+### Steps
 
 ```bash
+git clone https://github.com/hellohopper/Porty.git
+cd Porty
+
 # Quick dev run (shows a Dock icon, fine for iterating)
 swift run
 
@@ -53,6 +64,8 @@ export APPLE_APP_SPECIFIC_PASSWORD="...."   # or use a stored notarytool profile
 
 This signs with hardened runtime, submits to Apple's notary service, and staples the ticket to the DMG. Porty is intentionally unsandboxed (it shells out to `lsof`/`ps`/`kill` to inspect and manage other processes), so no App Sandbox entitlements are requested.
 
-## Status
+Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/Porty/releases).
 
-Feature-complete relative to comparable menu bar port trackers (Ports App, Port Menu): port scanning, project/git context, uptime, kill, open-in-browser, copy URL, dedup. Packaging supports both a quick ad-hoc local build and a real signed/notarized DMG for distribution.
+## License
+
+[MIT](LICENSE)
