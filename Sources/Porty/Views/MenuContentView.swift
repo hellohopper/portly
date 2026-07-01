@@ -63,6 +63,11 @@ private struct PortRow: View {
                 }
             }
             Spacer()
+            Button(action: { TerminalRevealer.reveal(pid: info.pid) }) {
+                Image(systemName: "terminal")
+            }
+            .buttonStyle(.borderless)
+            .help("Reveal owning terminal")
             if info.proto == "TCP" {
                 Button(action: openInBrowser) {
                     Image(systemName: "safari")
