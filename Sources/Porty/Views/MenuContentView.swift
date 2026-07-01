@@ -38,9 +38,19 @@ private struct PortRow: View {
                 .frame(width: 8, height: 8)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(":\(info.port)")
-                    .font(.system(.body, design: .monospaced).bold())
-                Text("\(info.processName) · pid \(info.pid) · \(info.proto)")
+                HStack(spacing: 6) {
+                    Text(verbatim: "\(info.port)")
+                        .font(.system(.body, design: .monospaced).bold())
+                    if let projectName = info.projectName {
+                        Text(projectLabel(name: projectName, branch: info.gitBranch))
+                            .font(.caption)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.secondary.opacity(0.15))
+                            .clipShape(Capsule())
+                    }
+                }
+                Text(verbatim: "\(info.processName) · pid \(info.pid) · \(info.proto)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -52,5 +62,10 @@ private struct PortRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    private func projectLabel(name: String, branch: String?) -> String {
+        guard let branch else { return name }
+        return "\(name)·\(branch)"
     }
 }
