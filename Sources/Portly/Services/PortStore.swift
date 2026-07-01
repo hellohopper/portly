@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 @MainActor
 final class PortStore: ObservableObject {
@@ -19,6 +20,7 @@ final class PortStore: ObservableObject {
     @Published var ignoredProcessNames: Set<String> = PortStore.loadIgnoredProcessNames()
     @Published var portLabels: [Int: String] = PortStore.loadPortLabels()
     @Published var hasAlert: Bool = false
+    @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
 
     private static let ignoredProcessNamesDefaultsKey = "ignoredProcessNames"
     private static let portLabelsDefaultsKey = "portLabels"
@@ -192,6 +194,20 @@ final class PortStore: ObservableObject {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
         Task {
             self.availableUpdate = await UpdateChecker.checkForUpdate(currentVersion: currentVersion)
+        }
+    }
+
+    func installUpdate() {
+        guard let update = availableUpdate, let dmgURL = update.dmgURL else {
+            if let update = availableUpdate {
+                NSWorkspace.shared.open(update.url)
+            }
+            return
+        }
+        Task {
+            await AutoUpdater.downloadAndInstall(dmgURL: dmgURL, releasePageURL: update.url) { [weak self] phase in
+                self?.updatePhase = phase
+            }
         }
     }
 }

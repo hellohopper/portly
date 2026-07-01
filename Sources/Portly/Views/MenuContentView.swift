@@ -136,18 +136,37 @@ struct MenuContentView: View {
     }
 
     private func updateBanner(_ update: UpdateChecker.UpdateInfo) -> some View {
-        Button(action: { NSWorkspace.shared.open(update.url) }) {
-            HStack {
-                Image(systemName: "arrow.down.circle.fill")
-                Text("Update available: v\(update.version)")
-                Spacer()
-                Image(systemName: "arrow.up.right")
+        HStack {
+            Image(systemName: "arrow.down.circle.fill")
+            Text(updateBannerText(update))
+            Spacer()
+            switch store.updatePhase {
+            case .idle, .failed:
+                Button(update.dmgURL != nil ? "Download & Install" : "View") {
+                    store.installUpdate()
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+            case .downloading, .installing:
+                ProgressView().controlSize(.small)
             }
         }
-        .buttonStyle(.plain)
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(Color.accentColor.opacity(0.15))
+    }
+
+    private func updateBannerText(_ update: UpdateChecker.UpdateInfo) -> String {
+        switch store.updatePhase {
+        case .idle:
+            return "Update available: v\(update.version)"
+        case .downloading:
+            return "Downloading v\(update.version)…"
+        case .installing:
+            return "Installing v\(update.version)…"
+        case .failed(let message):
+            return "Update failed: \(message)"
+        }
     }
 
     private var searchField: some View {
