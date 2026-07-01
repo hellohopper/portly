@@ -18,7 +18,7 @@ jobs:
           xcode-version: latest-stable
 
       - name: Run tests
-        run: swift test
+        run: swift test --num-workers 1
 
       - name: Build DMG
         run: ./scripts/build-dmg.sh
