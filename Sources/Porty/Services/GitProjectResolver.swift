@@ -42,7 +42,7 @@ enum GitProjectResolver {
     }
 
     /// Walks up from `path` looking for a ".git" directory or file (worktrees use a file).
-    private static func findGitDir(startingAt path: String) -> URL? {
+    static func findGitDir(startingAt path: String) -> URL? {
         var current = URL(fileURLWithPath: path)
         let fm = FileManager.default
 
@@ -57,18 +57,20 @@ enum GitProjectResolver {
         }
     }
 
-    private static func readBranch(gitDir: URL) -> String? {
-        var headURL = gitDir.appendingPathComponent("HEAD")
+    static func readBranch(gitDir: URL) -> String? {
+        var actualGitDir = gitDir
 
-        // Worktrees: .git is a file pointing at "gitdir: /path/to/real/.git/worktrees/<name>"
-        if let contents = try? String(contentsOf: headURL, encoding: .utf8),
+        // Worktrees: ".git" is a file (not a directory) containing
+        // "gitdir: /path/to/real/.git/worktrees/<name>", which itself has its own HEAD.
+        if let contents = try? String(contentsOf: gitDir, encoding: .utf8),
            contents.hasPrefix("gitdir:") {
             let realPath = contents
                 .replacingOccurrences(of: "gitdir:", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            headURL = URL(fileURLWithPath: realPath).appendingPathComponent("HEAD")
+            actualGitDir = URL(fileURLWithPath: realPath)
         }
 
+        let headURL = actualGitDir.appendingPathComponent("HEAD")
         guard let head = try? String(contentsOf: headURL, encoding: .utf8) else { return nil }
         let trimmed = head.trimmingCharacters(in: .whitespacesAndNewlines)
 

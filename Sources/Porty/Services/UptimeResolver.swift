@@ -36,7 +36,7 @@ enum UptimeResolver {
     }
 
     /// Parses macOS `ps etime` format: "[[dd-]hh:]mm:ss"
-    private static func parseElapsed(_ raw: String) -> Int? {
+    static func parseElapsed(_ raw: String) -> Int? {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)
         var days = 0
         var rest = trimmed
