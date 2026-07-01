@@ -9,6 +9,7 @@ final class PortStore: ObservableObject {
     private var timer: Timer?
     private let pollInterval: TimeInterval = 2.0
     private static let pinnedPortsDefaultsKey = "pinnedPorts"
+    private var hasCompletedInitialScan = false
 
     /// Git/project context rarely changes for the lifetime of a process, so cache it per pid
     /// instead of re-resolving (which shells out to lsof + reads files) on every poll.
@@ -57,6 +58,13 @@ final class PortStore: ObservableObject {
 
             let finalEnriched = enriched
             await MainActor.run {
+                if self.hasCompletedInitialScan {
+                    let diff = PortDiffer.diff(old: self.ports, new: finalEnriched, pinned: self.pinnedPorts)
+                    diff.newPorts.forEach(NotificationManager.notifyNewPort)
+                    diff.deadPinnedPorts.forEach(NotificationManager.notifyPinnedPortDied)
+                }
+                self.hasCompletedInitialScan = true
+
                 self.ports = finalEnriched
                 let livePids = Set(finalEnriched.map(\.pid))
                 self.projectContextCache = self.projectContextCache.filter { livePids.contains($0.key) }
