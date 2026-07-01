@@ -23,7 +23,7 @@ struct MenuContentView: View {
             }
             .padding(8)
         }
-        .frame(width: 320)
+        .frame(width: 380)
     }
 }
 
@@ -50,15 +50,22 @@ private struct PortRow: View {
                             .clipShape(Capsule())
                     }
                 }
-                HStack(spacing: 4) {
-                    Text(verbatim: subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if let cpuPercent = info.cpuPercent {
-                        Circle()
-                            .fill(energyColor(for: cpuPercent))
-                            .frame(width: 6, height: 6)
-                            .help("Energy impact (based on CPU usage)")
+                Text(verbatim: primaryLine)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                if let secondaryLine {
+                    HStack(spacing: 4) {
+                        Text(verbatim: secondaryLine)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                        if let cpuPercent = info.cpuPercent {
+                            Circle()
+                                .fill(energyColor(for: cpuPercent))
+                                .frame(width: 6, height: 6)
+                                .help("Energy impact (based on CPU usage)")
+                        }
                     }
                 }
             }
@@ -103,15 +110,17 @@ private struct PortRow: View {
         return "\(name)·\(branch)"
     }
 
-    private var subtitle: String {
-        var parts = ["\(info.processName)", "pid \(info.pid)", info.proto]
+    private var primaryLine: String {
+        var parts = [info.frameworkLabel ?? info.processName, "pid \(info.pid)", info.proto]
         if let uptimeSeconds = info.uptimeSeconds {
             parts.append(UptimeResolver.format(uptimeSeconds))
         }
-        if let cpuPercent = info.cpuPercent, let memPercent = info.memPercent {
-            parts.append(String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent))
-        }
         return parts.joined(separator: " · ")
+    }
+
+    private var secondaryLine: String? {
+        guard let cpuPercent = info.cpuPercent, let memPercent = info.memPercent else { return nil }
+        return String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent)
     }
 
     private func energyColor(for cpuPercent: Double) -> Color {

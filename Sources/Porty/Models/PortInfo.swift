@@ -11,6 +11,7 @@ struct PortInfo: Identifiable, Hashable {
     var uptimeSeconds: Int?
     var cpuPercent: Double?
     var memPercent: Double?
+    var frameworkLabel: String?
 
     var id: String { "\(pid)-\(port)-\(proto)" }
 }
