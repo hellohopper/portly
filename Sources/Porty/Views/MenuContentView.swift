@@ -55,6 +55,13 @@ private struct PortRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
+            if info.proto == "TCP" {
+                Button(action: openInBrowser) {
+                    Image(systemName: "safari")
+                }
+                .buttonStyle(.borderless)
+                .help("Open localhost:\(info.port) in browser")
+            }
             Button(role: .destructive, action: onKill) {
                 Image(systemName: "xmark.circle.fill")
             }
@@ -62,6 +69,11 @@ private struct PortRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+    }
+
+    private func openInBrowser() {
+        guard let url = URL(string: "http://localhost:\(info.port)") else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func projectLabel(name: String, branch: String?) -> String {
