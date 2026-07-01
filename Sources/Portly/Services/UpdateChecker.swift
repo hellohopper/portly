@@ -4,6 +4,9 @@ enum UpdateChecker {
     struct UpdateInfo {
         let version: String
         let url: URL
+        /// Direct download URL for the release's Portly.dmg asset, when published.
+        /// Powers in-app "download and install"; falls back to opening `url` when nil.
+        let dmgURL: URL?
     }
 
     private static let releasesAPIURL = URL(string: "https://api.github.com/repos/hellohopper/portly/releases/latest")!
@@ -20,7 +23,12 @@ enum UpdateChecker {
 
         let latestVersion = tagName.hasPrefix("v") ? String(tagName.dropFirst()) : tagName
         guard isVersion(latestVersion, newerThan: currentVersion) else { return nil }
-        return UpdateInfo(version: latestVersion, url: htmlURL)
+
+        let assets = json["assets"] as? [[String: Any]] ?? []
+        let dmgAsset = assets.first { ($0["name"] as? String)?.hasSuffix(".dmg") == true }
+        let dmgURL = (dmgAsset?["browser_download_url"] as? String).flatMap(URL.init(string:))
+
+        return UpdateInfo(version: latestVersion, url: htmlURL, dmgURL: dmgURL)
     }
 
     /// Numeric, component-wise comparison (so "0.10.0" correctly beats "0.9.0",

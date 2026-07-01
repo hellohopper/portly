@@ -25,7 +25,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Notifications | Alerted when a new port starts listening, or a pinned port dies |
 | Docker awareness | Flags ports forwarded through Docker Desktop's host process |
 | Bulk actions | Select multiple ports and kill them in one action |
-| Auto-update check | In-app banner when a newer GitHub release is available |
+| Auto-update check | In-app banner when a newer GitHub release is available, with one-click "Download & Install" |
 | Launch at Login | Toggle in Settings, backed by `SMAppService` |
 | Menu bar alert state | Icon tints red when a pinned port dies, clears once you open the menu |
 | Ignore list | Right-click a port to hide it (and its process) from the list going forward |
@@ -52,6 +52,8 @@ shasum -a 256 -c Portly.dmg.sha256
 ```
 
 > Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Portly.app` → **Open** → **Open** to bypass this once.
+
+After the first install, Portly can update itself in place: when a newer release is available, click **Download & Install** in the banner to fetch the DMG, swap the app bundle, and relaunch automatically. This only works when Portly is running from `/Applications` (true for both the Homebrew and manual install paths above) — otherwise the banner just opens the release page.
 
 ## Build from Source
 

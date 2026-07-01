@@ -3,6 +3,11 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.1] - 2026-07-01
+
+### Added
+- One-click "Download & Install" in the update banner — downloads the latest release's DMG, swaps the running app bundle in place, and relaunches automatically. Falls back to opening the release page when the app isn't running from `/Applications` (e.g. a dev build) or no DMG asset is published.
+
 ## [0.3.0] - 2026-07-01
 
 ### Added
@@ -40,6 +45,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.3.1]: https://github.com/hellohopper/portly/releases/tag/v0.3.1
 [0.3.0]: https://github.com/hellohopper/portly/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hellohopper/portly/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hellohopper/portly/releases/tag/v0.1.0
