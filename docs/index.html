@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Porty — Local Port Tracker for macOS</title>
+<meta name="description" content="A native macOS menu bar app for tracking local port usage — see what's listening, which project it belongs to, and kill it or open it in your browser with one click.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="nav">
+  <div class="nav-inner">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-name">Porty</span>
+    </div>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#download">Download</a>
+      <a href="https://github.com/hellohopper/Porty">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Know what's running on your ports.</h1>
+    <p class="subtitle">
+      A native macOS menu bar app that tracks every listening port — which
+      project it belongs to, how much CPU it's burning, and how to kill it
+      or jump to it, all in one click.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/hellohopper/Porty/releases" id="download">Download for macOS</a>
+      <a class="btn btn-secondary" href="https://github.com/hellohopper/Porty">View source</a>
+    </div>
+    <p class="requirement">macOS 13+ · Free &amp; open source · MIT licensed</p>
+  </section>
+
+  <section class="mockup-section">
+    <div class="menubar-mockup" aria-hidden="true">
+      <div class="mockup-titlebar">
+        <span class="mockup-icon">◱</span> Porty
+      </div>
+
+      <div class="mockup-row">
+        <span class="dot dot-green"></span>
+        <div class="mockup-row-text">
+          <div class="mockup-row-top">
+            <span class="mockup-port">5173</span>
+            <span class="mockup-badge">porty-web·main</span>
+          </div>
+          <div class="mockup-row-mid">Vite · pid 4821 · TCP · 12m</div>
+          <div class="mockup-row-bottom">
+            <span>CPU 3% · MEM 1%</span>
+            <span class="dot dot-tiny dot-green"></span>
+          </div>
+        </div>
+        <div class="mockup-actions">⌘ ⧉ ⨯</div>
+      </div>
+
+      <div class="mockup-divider"></div>
+
+      <div class="mockup-row">
+        <span class="dot dot-green"></span>
+        <div class="mockup-row-text">
+          <div class="mockup-row-top">
+            <span class="mockup-port">3000</span>
+            <span class="mockup-badge">api-service·feature/auth</span>
+          </div>
+          <div class="mockup-row-mid">Next.js · pid 5310 · TCP · 1h 4m</div>
+          <div class="mockup-row-bottom">
+            <span>CPU 18% · MEM 4%</span>
+            <span class="dot dot-tiny dot-yellow"></span>
+          </div>
+        </div>
+        <div class="mockup-actions">⌘ ⧉ ⨯</div>
+      </div>
+
+      <div class="mockup-divider"></div>
+
+      <div class="mockup-row">
+        <span class="dot dot-green"></span>
+        <div class="mockup-row-text">
+          <div class="mockup-row-top">
+            <span class="mockup-port">8000</span>
+          </div>
+          <div class="mockup-row-mid">FastAPI · pid 6112 · TCP · 5m</div>
+          <div class="mockup-row-bottom">
+            <span>CPU 31% · MEM 2%</span>
+            <span class="dot dot-tiny dot-red"></span>
+          </div>
+        </div>
+        <div class="mockup-actions">⌘ ⧉ ⨯</div>
+      </div>
+
+      <div class="mockup-footer">
+        <span>Refresh</span>
+        <span class="mockup-theme">☀ ◐ ☾</span>
+        <span>Quit Porty</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="features" id="features">
+    <h2>Everything you need, nothing you don't</h2>
+    <div class="feature-grid">
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Framework-aware labeling</h3>
+        <p>Recognizes Vite, Next.js, Rails, Django, Flask, FastAPI, Node, Bun, Deno, and more — right from the process's command line.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⎇</div>
+        <h3>Git project context</h3>
+        <p>Shows the repo name and current branch for each dev server, resolved from its working directory.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">◐</div>
+        <h3>CPU, memory &amp; energy</h3>
+        <p>Live %CPU and %MEM per process, plus a color-coded energy indicator so you can spot the one burning your battery.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⌘</div>
+        <h3>Jump to terminal</h3>
+        <p>One click brings Terminal.app to the front and selects the exact tab running that process.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⧉</div>
+        <h3>Open or copy the URL</h3>
+        <p>Launch <code>localhost:&lt;port&gt;</code> in your browser, or right-click to copy the URL to your clipboard.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">☾</div>
+        <h3>System / Light / Dark</h3>
+        <p>Matches your Mac's appearance automatically, or override it from the menu.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="download-section" id="download-section">
+    <h2>Get Porty</h2>
+    <p>Grab the signed DMG from GitHub Releases, or build it yourself from source.</p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="https://github.com/hellohopper/Porty/releases">Latest release</a>
+      <a class="btn btn-secondary" href="https://github.com/hellohopper/Porty#build-from-source">Build from source</a>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <p>Porty is free and open source, <a href="https://github.com/hellohopper/Porty/blob/main/LICENSE">MIT licensed</a>.</p>
+  <p><a href="https://github.com/hellohopper/Porty">github.com/hellohopper/Porty</a></p>
+</footer>
+
+</body>
+</html>
