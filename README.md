@@ -4,10 +4,13 @@ A native macOS menu bar app for tracking local port usage — see what's listeni
 
 ## Features
 
-- Live list of listening TCP/UDP ports, refreshed every 2s (deduped across IPv4/IPv6)
-- Process name, pid, protocol, and uptime per port
+- Live list of listening TCP/UDP ports, refreshed every 2s (deduped across IPv4/IPv6, and merged into one row when a process listens on both protocols for the same port)
+- Framework-aware labeling — recognizes Vite, Next.js, Rails, Django, Flask, FastAPI, Node, Bun, Deno, and more from the process's command line
 - Git project context — repo name + current branch, resolved from the process's working directory
-- Kill a process, open `localhost:<port>` in your browser, or right-click to copy the URL
+- CPU/memory per process, plus a color-coded energy indicator (green/yellow/red) as an Activity Monitor-style proxy for energy impact
+- Uptime per port
+- Kill a process, reveal its owning Terminal.app tab, open `localhost:<port>` in your browser, or right-click to copy the URL
+- System/Light/Dark theme toggle
 - Green active-port indicator
 
 ## Download
