@@ -2,22 +2,35 @@
 
 A native macOS menu bar app for tracking local port usage — see what's listening on your machine, which project it belongs to, and kill it or open it in your browser with one click.
 
-A showcase website lives at [`docs/index.html`](docs/index.html) — open it locally, or serve it via GitHub Pages once the repo is public (Settings → Pages → source: `main` / `/docs`).
+Showcase website: **[hellohopper.github.io/Portly](https://hellohopper.github.io/Portly/)**
+
+![Portly screenshot](docs/assets/screenshot.png)
 
 ## Features
 
-- Live list of listening TCP/UDP ports, refreshed every 2s (deduped across IPv4/IPv6, and merged into one row when a process listens on both protocols for the same port)
-- Framework-aware labeling — recognizes Vite, Next.js, Rails, Django, Flask, FastAPI, Node, Bun, Deno, and more from the process's command line
-- Git project context — repo name + current branch, resolved from the process's working directory
-- CPU/memory per process, plus a color-coded energy indicator (green/yellow/red) as an Activity Monitor-style proxy for energy impact
-- Uptime per port
-- Kill a process, reveal its owning Terminal.app tab, open `localhost:<port>` in your browser, or right-click to copy the URL
-- System/Light/Dark theme toggle
-- Green active-port indicator
+| Feature | Description |
+|---|---|
+| Live port list | Every listening TCP/UDP port, refreshed every 2s, deduped across IPv4/IPv6 (and merged into one row when a process listens on both protocols for the same port) |
+| Framework-aware labeling | Recognizes Vite, Next.js, Rails, Django, Flask, FastAPI, Node, Bun, Deno, and more from the process's command line |
+| Git project context | Repo name + current branch, resolved from the process's working directory |
+| CPU / memory + energy | Live %CPU and %MEM per process, plus a color-coded (green/yellow/red) Activity Monitor-style energy indicator |
+| Uptime | How long each port has been listening |
+| Kill process | One click, with a confirmation-free `SIGTERM` |
+| Reveal owning terminal | Brings Terminal.app to the front and selects the exact tab running that process |
+| Open / copy URL | Launch `localhost:<port>` in your browser, or right-click to copy the URL |
+| Theme toggle | System / Light / Dark, persisted across launches |
+| Active-port indicator | Green dot per row |
 
 ## Download
 
-Grab the latest `Portly.dmg` from the [Releases page](https://github.com/hellohopper/Portly/releases/latest), open it, and drag `Portly.app` into `Applications`.
+**Homebrew:**
+
+```bash
+brew tap hellohopper/portly
+brew install --cask portly
+```
+
+**Manual:** grab the latest `Portly.dmg` from the [Releases page](https://github.com/hellohopper/Portly/releases/latest), open it, and drag `Portly.app` into `Applications`.
 
 Each release also publishes a `Portly.dmg.sha256` checksum (and includes the hash in the release notes) so you can verify the download:
 

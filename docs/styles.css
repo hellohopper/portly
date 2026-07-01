@@ -291,6 +291,20 @@ main {
   margin-bottom: 28px;
 }
 
+.install-command {
+  display: inline-block;
+  text-align: left;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 20px;
+  margin: 0 0 24px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.7;
+}
+
 .footer {
   text-align: center;
   padding: 32px 24px 48px;
