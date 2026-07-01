@@ -2,6 +2,11 @@ import SwiftUI
 
 struct MenuContentView: View {
     @ObservedObject var store: PortStore
+    @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
+
+    private var theme: AppTheme {
+        AppTheme(rawValue: themeRawValue) ?? .system
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -19,11 +24,21 @@ struct MenuContentView: View {
             HStack {
                 Button("Refresh") { store.refresh() }
                 Spacer()
+                Picker("Theme", selection: $themeRawValue) {
+                    ForEach(AppTheme.allCases) { option in
+                        Image(systemName: option.iconName).tag(option.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .frame(width: 90)
+                .labelsHidden()
+                Spacer()
                 Button("Quit Porty") { NSApplication.shared.terminate(nil) }
             }
             .padding(8)
         }
         .frame(width: 380)
+        .preferredColorScheme(theme.colorScheme)
     }
 }
 
