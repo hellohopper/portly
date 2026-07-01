@@ -5,6 +5,7 @@ import Combine
 final class PortStore: ObservableObject {
     @Published private(set) var ports: [PortInfo] = []
     @Published private(set) var pinnedPorts: Set<Int> = PortStore.loadPinnedPorts()
+    @Published private(set) var availableUpdate: UpdateChecker.UpdateInfo?
 
     private var timer: Timer?
     private let pollInterval: TimeInterval = 2.0
@@ -109,5 +110,12 @@ final class PortStore: ObservableObject {
 
     private static func loadPinnedPorts() -> Set<Int> {
         Set(UserDefaults.standard.array(forKey: pinnedPortsDefaultsKey) as? [Int] ?? [])
+    }
+
+    func checkForUpdate() {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+        Task {
+            self.availableUpdate = await UpdateChecker.checkForUpdate(currentVersion: currentVersion)
+        }
     }
 }

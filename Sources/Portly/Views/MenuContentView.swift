@@ -21,6 +21,11 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            if let update = store.availableUpdate {
+                updateBanner(update)
+                Divider()
+            }
+
             if store.ports.isEmpty {
                 Text("No listening ports")
                     .foregroundStyle(.secondary)
@@ -115,6 +120,21 @@ struct MenuContentView: View {
     private func exitSelectionMode() {
         isSelecting = false
         selectedPorts.removeAll()
+    }
+
+    private func updateBanner(_ update: UpdateChecker.UpdateInfo) -> some View {
+        Button(action: { NSWorkspace.shared.open(update.url) }) {
+            HStack {
+                Image(systemName: "arrow.down.circle.fill")
+                Text("Update available: v\(update.version)")
+                Spacer()
+                Image(systemName: "arrow.up.right")
+            }
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.accentColor.opacity(0.15))
     }
 
     private var searchField: some View {

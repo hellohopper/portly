@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.popover = popover
 
         store.start()
+        store.checkForUpdate()
         NotificationManager.requestAuthorization()
 
         hotkeyManager = HotkeyManager { [weak self] in
