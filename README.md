@@ -14,6 +14,12 @@ A native macOS menu bar app for tracking local port usage — see what's listeni
 
 Grab the latest `Porty.dmg` from the [Releases page](https://github.com/hellohopper/Porty/releases/latest), open it, and drag `Porty.app` into `Applications`.
 
+Each release also publishes a `Porty.dmg.sha256` checksum (and includes the hash in the release notes) so you can verify the download:
+
+```bash
+shasum -a 256 -c Porty.dmg.sha256
+```
+
 > Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Porty.app` → **Open** → **Open** to bypass this once.
 
 ## Build from Source
