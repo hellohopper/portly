@@ -2,6 +2,8 @@
 
 A native macOS menu bar app for tracking local port usage — see what's listening on your machine, which project it belongs to, and kill it or open it in your browser with one click.
 
+A showcase website lives at [`docs/index.html`](docs/index.html) — open it locally, or serve it via GitHub Pages once the repo is public (Settings → Pages → source: `main` / `/docs`).
+
 ## Features
 
 - Live list of listening TCP/UDP ports, refreshed every 2s (deduped across IPv4/IPv6, and merged into one row when a process listens on both protocols for the same port)
