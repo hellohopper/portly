@@ -31,12 +31,15 @@ final class PortStore: ObservableObject {
             let scanned = PortScanner.scan().sorted { $0.port < $1.port }
             guard let self else { return }
 
+            let uptimes = UptimeResolver.elapsedSeconds(for: Array(Set(scanned.map(\.pid))))
+
             var enriched: [PortInfo] = []
             enriched.reserveCapacity(scanned.count)
             for var info in scanned {
                 let context = await self.projectContext(for: info.pid)
                 info.projectName = context.projectName
                 info.gitBranch = context.gitBranch
+                info.uptimeSeconds = uptimes[info.pid]
                 enriched.append(info)
             }
 
