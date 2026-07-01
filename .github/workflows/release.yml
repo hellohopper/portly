@@ -1,5 +1,7 @@
 name: Release
 
+# Tests run in .github/workflows/tests.yml (on every push/PR to main), not here.
+# This workflow assumes the tagged commit has already passed there.
 on:
   push:
     tags:
@@ -16,10 +18,6 @@ jobs:
         uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: "16.4"
-
-      - name: Run tests
-        timeout-minutes: 5
-        run: swift test
 
       - name: Build DMG
         run: ./scripts/build-dmg.sh
