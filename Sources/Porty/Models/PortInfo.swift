@@ -8,6 +8,7 @@ struct PortInfo: Identifiable, Hashable {
     let commandPath: String?
     var projectName: String?
     var gitBranch: String?
+    var uptimeSeconds: Int?
 
     var id: String { "\(pid)-\(port)-\(proto)" }
 }

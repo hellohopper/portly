@@ -50,7 +50,7 @@ private struct PortRow: View {
                             .clipShape(Capsule())
                     }
                 }
-                Text(verbatim: "\(info.processName) · pid \(info.pid) · \(info.proto)")
+                Text(verbatim: subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -67,5 +67,13 @@ private struct PortRow: View {
     private func projectLabel(name: String, branch: String?) -> String {
         guard let branch else { return name }
         return "\(name)·\(branch)"
+    }
+
+    private var subtitle: String {
+        var parts = ["\(info.processName)", "pid \(info.pid)", info.proto]
+        if let uptimeSeconds = info.uptimeSeconds {
+            parts.append(UptimeResolver.format(uptimeSeconds))
+        }
+        return parts.joined(separator: " · ")
     }
 }
