@@ -4,9 +4,11 @@ import Combine
 @MainActor
 final class PortStore: ObservableObject {
     @Published private(set) var ports: [PortInfo] = []
+    @Published private(set) var pinnedPorts: Set<Int> = PortStore.loadPinnedPorts()
 
     private var timer: Timer?
     private let pollInterval: TimeInterval = 2.0
+    private static let pinnedPortsDefaultsKey = "pinnedPorts"
 
     /// Git/project context rarely changes for the lifetime of a process, so cache it per pid
     /// instead of re-resolving (which shells out to lsof + reads files) on every poll.
@@ -77,5 +79,18 @@ final class PortStore: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.refresh()
         }
+    }
+
+    func togglePin(_ port: Int) {
+        if pinnedPorts.contains(port) {
+            pinnedPorts.remove(port)
+        } else {
+            pinnedPorts.insert(port)
+        }
+        UserDefaults.standard.set(Array(pinnedPorts), forKey: Self.pinnedPortsDefaultsKey)
+    }
+
+    private static func loadPinnedPorts() -> Set<Int> {
+        Set(UserDefaults.standard.array(forKey: pinnedPortsDefaultsKey) as? [Int] ?? [])
     }
 }

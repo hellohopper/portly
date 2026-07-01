@@ -13,6 +13,10 @@ struct MenuContentView: View {
         store.ports.filter { $0.matches(query: searchText) }
     }
 
+    private var sections: [PortGrouping.Section] {
+        PortGrouping.sections(for: filteredPorts, pinned: store.pinnedPorts)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             if store.ports.isEmpty {
@@ -30,10 +34,27 @@ struct MenuContentView: View {
                         .foregroundStyle(.secondary)
                         .padding()
                 } else {
-                    ForEach(filteredPorts) { port in
-                        PortRow(info: port, onKill: { store.kill(port) })
-                        Divider()
+                    ScrollView {
+                        ForEach(sections) { section in
+                            Text(section.title.uppercased())
+                                .font(.caption2.bold())
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 12)
+                                .padding(.top, 8)
+                                .padding(.bottom, 2)
+
+                            ForEach(section.ports) { port in
+                                PortRow(
+                                    info: port,
+                                    isPinned: store.pinnedPorts.contains(port.port),
+                                    onKill: { store.kill(port) },
+                                    onTogglePin: { store.togglePin(port.port) }
+                                )
+                                Divider()
+                            }
+                        }
                     }
+                    .frame(maxHeight: 420)
                 }
             }
 
@@ -53,7 +74,7 @@ struct MenuContentView: View {
             }
             .padding(8)
         }
-        .frame(width: 380)
+        .frame(width: 400)
         .preferredColorScheme(theme.colorScheme)
     }
 
@@ -76,7 +97,9 @@ struct MenuContentView: View {
 
 private struct PortRow: View {
     let info: PortInfo
+    let isPinned: Bool
     let onKill: () -> Void
+    let onTogglePin: () -> Void
 
     var body: some View {
         HStack {
@@ -117,6 +140,12 @@ private struct PortRow: View {
                 }
             }
             Spacer()
+            Button(action: onTogglePin) {
+                Image(systemName: isPinned ? "star.fill" : "star")
+                    .foregroundStyle(isPinned ? .yellow : .secondary)
+            }
+            .buttonStyle(.borderless)
+            .help(isPinned ? "Unpin" : "Pin to top")
             Button(action: { TerminalRevealer.reveal(pid: info.pid) }) {
                 Image(systemName: "terminal")
             }
