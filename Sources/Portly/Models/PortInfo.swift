@@ -14,4 +14,21 @@ struct PortInfo: Identifiable, Hashable {
     var frameworkLabel: String?
 
     var id: String { "\(pid)-\(port)-\(proto)" }
+
+    /// Case-insensitive substring match against port, process name, framework
+    /// label, project name, and git branch -- used to power the search field.
+    func matches(query: String) -> Bool {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return true }
+        let needle = trimmed.lowercased()
+
+        let haystacks: [String?] = [
+            String(port),
+            processName,
+            frameworkLabel,
+            projectName,
+            gitBranch
+        ]
+        return haystacks.contains { $0?.lowercased().contains(needle) == true }
+    }
 }

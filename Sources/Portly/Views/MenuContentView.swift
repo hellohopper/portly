@@ -3,9 +3,14 @@ import SwiftUI
 struct MenuContentView: View {
     @ObservedObject var store: PortStore
     @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
+    @State private var searchText: String = ""
 
     private var theme: AppTheme {
         AppTheme(rawValue: themeRawValue) ?? .system
+    }
+
+    private var filteredPorts: [PortInfo] {
+        store.ports.filter { $0.matches(query: searchText) }
     }
 
     var body: some View {
@@ -15,9 +20,20 @@ struct MenuContentView: View {
                     .foregroundStyle(.secondary)
                     .padding()
             } else {
-                ForEach(store.ports) { port in
-                    PortRow(info: port, onKill: { store.kill(port) })
-                    Divider()
+                searchField
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                Divider()
+
+                if filteredPorts.isEmpty {
+                    Text("No ports match \"\(searchText)\"")
+                        .foregroundStyle(.secondary)
+                        .padding()
+                } else {
+                    ForEach(filteredPorts) { port in
+                        PortRow(info: port, onKill: { store.kill(port) })
+                        Divider()
+                    }
                 }
             }
 
@@ -39,6 +55,22 @@ struct MenuContentView: View {
         }
         .frame(width: 380)
         .preferredColorScheme(theme.colorScheme)
+    }
+
+    private var searchField: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+            TextField("Search ports, projects, frameworks…", text: $searchText)
+                .textFieldStyle(.plain)
+            if !searchText.isEmpty {
+                Button(action: { searchText = "" }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.borderless)
+            }
+        }
     }
 }
 
