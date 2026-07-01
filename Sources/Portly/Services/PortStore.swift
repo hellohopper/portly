@@ -89,6 +89,15 @@ final class PortStore: ObservableObject {
         }
     }
 
+    func kill(_ infos: [PortInfo]) {
+        for info in infos {
+            Darwin.kill(info.pid, SIGTERM)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.refresh()
+        }
+    }
+
     func togglePin(_ port: Int) {
         if pinnedPorts.contains(port) {
             pinnedPorts.remove(port)

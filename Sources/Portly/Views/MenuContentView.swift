@@ -4,6 +4,8 @@ struct MenuContentView: View {
     @ObservedObject var store: PortStore
     @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
     @State private var searchText: String = ""
+    @State private var isSelecting: Bool = false
+    @State private var selectedPorts: Set<Int> = []
 
     private var theme: AppTheme {
         AppTheme(rawValue: themeRawValue) ?? .system
@@ -47,8 +49,11 @@ struct MenuContentView: View {
                                 PortRow(
                                     info: port,
                                     isPinned: store.pinnedPorts.contains(port.port),
+                                    isSelecting: isSelecting,
+                                    isSelected: selectedPorts.contains(port.port),
                                     onKill: { store.kill(port) },
-                                    onTogglePin: { store.togglePin(port.port) }
+                                    onTogglePin: { store.togglePin(port.port) },
+                                    onToggleSelect: { toggleSelection(port.port) }
                                 )
                                 Divider()
                             }
@@ -58,24 +63,58 @@ struct MenuContentView: View {
                 }
             }
 
-            HStack {
-                Button("Refresh") { store.refresh() }
-                Spacer()
-                Picker("Theme", selection: $themeRawValue) {
-                    ForEach(AppTheme.allCases) { option in
-                        Image(systemName: option.iconName).tag(option.rawValue)
+            if isSelecting && !selectedPorts.isEmpty {
+                HStack {
+                    Button(role: .destructive, action: killSelected) {
+                        Text("Kill \(selectedPorts.count) selected")
                     }
+                    Spacer()
+                    Button("Cancel") { exitSelectionMode() }
                 }
-                .pickerStyle(.segmented)
-                .frame(width: 90)
-                .labelsHidden()
-                Spacer()
-                Button("Quit Portly") { NSApplication.shared.terminate(nil) }
+                .padding(8)
+            } else {
+                HStack {
+                    Button("Refresh") { store.refresh() }
+                    Button(action: { isSelecting.toggle() }) {
+                        Image(systemName: isSelecting ? "checkmark.circle.fill" : "checkmark.circle")
+                    }
+                    .help(isSelecting ? "Cancel selection" : "Select multiple ports")
+                    Spacer()
+                    Picker("Theme", selection: $themeRawValue) {
+                        ForEach(AppTheme.allCases) { option in
+                            Image(systemName: option.iconName).tag(option.rawValue)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(width: 90)
+                    .labelsHidden()
+                    Spacer()
+                    Button("Quit Portly") { NSApplication.shared.terminate(nil) }
+                }
+                .padding(8)
             }
-            .padding(8)
         }
         .frame(width: 400)
         .preferredColorScheme(theme.colorScheme)
+    }
+
+    private func toggleSelection(_ port: Int) {
+        if selectedPorts.contains(port) {
+            selectedPorts.remove(port)
+        } else {
+            selectedPorts.insert(port)
+        }
+    }
+
+    private func killSelected() {
+        let toKill = filteredPorts.filter { selectedPorts.contains($0.port) }
+        store.kill(toKill)
+        exitSelectionMode()
+    }
+
+    private func exitSelectionMode() {
+        isSelecting = false
+        selectedPorts.removeAll()
     }
 
     private var searchField: some View {
@@ -98,14 +137,25 @@ struct MenuContentView: View {
 private struct PortRow: View {
     let info: PortInfo
     let isPinned: Bool
+    let isSelecting: Bool
+    let isSelected: Bool
     let onKill: () -> Void
     let onTogglePin: () -> Void
+    let onToggleSelect: () -> Void
 
     var body: some View {
         HStack {
-            Circle()
-                .fill(Color.green)
-                .frame(width: 8, height: 8)
+            if isSelecting {
+                Button(action: onToggleSelect) {
+                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                }
+                .buttonStyle(.borderless)
+            } else {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 8, height: 8)
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
@@ -171,6 +221,10 @@ private struct PortRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if isSelecting { onToggleSelect() }
+        }
         .contextMenu {
             Button("Copy localhost URL") { copyLocalhostURL() }
         }
