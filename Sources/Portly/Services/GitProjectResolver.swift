@@ -16,6 +16,12 @@ enum GitProjectResolver {
         return (projectName, branch)
     }
 
+    /// Public entry point for callers (e.g. quick-restart) that just need the cwd,
+    /// without the git project/branch resolution.
+    static func workingDirectory(of pid: Int32) -> String? {
+        currentWorkingDirectory(of: pid)
+    }
+
     private static func currentWorkingDirectory(of pid: Int32) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")

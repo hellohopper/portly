@@ -3,6 +3,18 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.3.0] - 2026-07-01
+
+### Added
+- Launch at Login toggle (via `SMAppService`)
+- Menu bar icon tints red when a pinned port dies, and clears once you open the menu
+- Ignore list — right-click a port to hide it (and its process) from the list going forward, manage the list from Settings
+- Export the current port list as JSON or CSV
+- Quick restart — kill a process and relaunch its exact command line in the same working directory
+- Custom global hotkey — rebind the toggle shortcut (default ⌘⇧P) from Settings
+- Per-port custom labels (e.g. "staging API") that persist across launches
+- New Settings popover (gear icon in the footer) consolidating the above
+
 ## [0.2.0] - 2026-07-01
 
 ### Added
@@ -28,5 +40,6 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.3.0]: https://github.com/hellohopper/portly/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hellohopper/portly/releases/tag/v0.2.0
 [0.1.0]: https://github.com/hellohopper/portly/releases/tag/v0.1.0

@@ -2,10 +2,12 @@ import SwiftUI
 
 struct MenuContentView: View {
     @ObservedObject var store: PortStore
+    let onHotkeyChange: (UInt32, UInt32) -> Void
     @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
     @State private var searchText: String = ""
     @State private var isSelecting: Bool = false
     @State private var selectedPorts: Set<Int> = []
+    @State private var isSettingsPresented: Bool = false
 
     private var theme: AppTheme {
         AppTheme(rawValue: themeRawValue) ?? .system
@@ -56,9 +58,13 @@ struct MenuContentView: View {
                                     isPinned: store.pinnedPorts.contains(port.port),
                                     isSelecting: isSelecting,
                                     isSelected: selectedPorts.contains(port.port),
+                                    label: store.portLabels[port.port],
                                     onKill: { store.kill(port) },
                                     onTogglePin: { store.togglePin(port.port) },
-                                    onToggleSelect: { toggleSelection(port.port) }
+                                    onToggleSelect: { toggleSelection(port.port) },
+                                    onRestart: { store.restart(port) },
+                                    onIgnore: { store.ignoreProcessName(port.processName) },
+                                    onSetLabel: { store.setLabel($0, for: port.port) }
                                 )
                                 Divider()
                             }
@@ -93,6 +99,13 @@ struct MenuContentView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 90)
                     .labelsHidden()
+                    Button(action: { isSettingsPresented.toggle() }) {
+                        Image(systemName: "gearshape")
+                    }
+                    .help("Settings")
+                    .popover(isPresented: $isSettingsPresented) {
+                        SettingsView(store: store, onHotkeyChange: onHotkeyChange)
+                    }
                     Spacer()
                     Button("Quit Portly") { NSApplication.shared.terminate(nil) }
                 }
@@ -159,9 +172,16 @@ private struct PortRow: View {
     let isPinned: Bool
     let isSelecting: Bool
     let isSelected: Bool
+    let label: String?
     let onKill: () -> Void
     let onTogglePin: () -> Void
     let onToggleSelect: () -> Void
+    let onRestart: () -> Void
+    let onIgnore: () -> Void
+    let onSetLabel: (String) -> Void
+
+    @State private var isEditingLabel = false
+    @State private var labelText = ""
 
     var body: some View {
         HStack {
@@ -195,6 +215,26 @@ private struct PortRow: View {
                             .background(Color.secondary.opacity(0.15))
                             .clipShape(Capsule())
                     }
+                    Button(action: beginEditingLabel) {
+                        Image(systemName: "pencil")
+                            .font(.caption2)
+                    }
+                    .buttonStyle(.borderless)
+                    .help("Add a custom label")
+                    .popover(isPresented: $isEditingLabel) {
+                        HStack {
+                            TextField("Label", text: $labelText, onCommit: commitLabel)
+                                .textFieldStyle(.roundedBorder)
+                                .frame(width: 160)
+                            Button("Save", action: commitLabel)
+                        }
+                        .padding(10)
+                    }
+                }
+                if let label {
+                    Text(label)
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.accentColor)
                 }
                 Text(verbatim: primaryLine)
                     .font(.caption)
@@ -227,6 +267,13 @@ private struct PortRow: View {
             }
             .buttonStyle(.borderless)
             .help("Reveal owning terminal")
+            if info.commandLine != nil {
+                Button(action: onRestart) {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                .help("Restart (kill + relaunch same command)")
+            }
             if info.proto.contains("TCP") {
                 Button(action: openInBrowser) {
                     Image(systemName: "safari")
@@ -247,7 +294,18 @@ private struct PortRow: View {
         }
         .contextMenu {
             Button("Copy localhost URL") { copyLocalhostURL() }
+            Button("Ignore \(info.processName)", action: onIgnore)
         }
+    }
+
+    private func beginEditingLabel() {
+        labelText = label ?? ""
+        isEditingLabel = true
+    }
+
+    private func commitLabel() {
+        onSetLabel(labelText)
+        isEditingLabel = false
     }
 
     private func openInBrowser() {
