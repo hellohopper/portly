@@ -1,5 +1,5 @@
 #!/bin/bash
-# Signs (with a real Developer ID), notarizes, and staples Porty.dmg.
+# Signs (with a real Developer ID), notarizes, and staples Portly.dmg.
 #
 # Requires a paid Apple Developer Program membership and:
 #   SIGN_IDENTITY   "Developer ID Application: Your Name (TEAMID)"
@@ -9,7 +9,7 @@
 #   APPLE_APP_SPECIFIC_PASSWORD
 #                    App-specific password generated at appleid.apple.com,
 #                    stored in Keychain via:
-#                    xcrun notarytool store-credentials "porty-notary" \
+#                    xcrun notarytool store-credentials "portly-notary" \
 #                      --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
 #                      --password "$APPLE_APP_SPECIFIC_PASSWORD"
 #
@@ -23,7 +23,7 @@ cd "$(dirname "$0")/.."
 : "${APPLE_ID:?Set APPLE_ID to your Apple ID email}"
 : "${APPLE_TEAM_ID:?Set APPLE_TEAM_ID to your Developer Team ID}"
 
-DMG_PATH=".build/Porty.dmg"
+DMG_PATH=".build/Portly.dmg"
 
 echo "==> Building signed (hardened runtime) release DMG"
 SIGN_IDENTITY="${SIGN_IDENTITY}" ./scripts/build-dmg.sh

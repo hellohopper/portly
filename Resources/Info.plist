@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>Porty</string>
+    <string>Portly</string>
     <key>CFBundleDisplayName</key>
-    <string>Porty</string>
+    <string>Portly</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.hellohopper.porty</string>
+    <string>dev.hellohopper.portly</string>
     <key>CFBundleVersion</key>
     <string>0.1.0</string>
     <key>CFBundleShortVersionString</key>
@@ -15,7 +15,7 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>Porty</string>
+    <string>Portly</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>LSUIElement</key>
@@ -25,6 +25,6 @@
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
     <key>NSAppleEventsUsageDescription</key>
-    <string>Porty uses Apple Events to bring Terminal.app to the front and select the tab running a given dev server.</string>
+    <string>Portly uses Apple Events to bring Terminal.app to the front and select the tab running a given dev server.</string>
 </dict>
 </plist>

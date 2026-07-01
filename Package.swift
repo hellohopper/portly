@@ -2,19 +2,19 @@
 import PackageDescription
 
 let package = Package(
-    name: "Porty",
+    name: "Portly",
     platforms: [
         .macOS(.v13)
     ],
     targets: [
         .executableTarget(
-            name: "Porty",
-            path: "Sources/Porty"
+            name: "Portly",
+            path: "Sources/Portly"
         ),
         .testTarget(
-            name: "PortyTests",
-            dependencies: ["Porty"],
-            path: "Tests/PortyTests"
+            name: "PortlyTests",
+            dependencies: ["Portly"],
+            path: "Tests/PortlyTests"
         )
     ]
 )

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Builds Porty.app (release) and packages it into a drag-to-Applications DMG.
+# Builds Portly.app (release) and packages it into a drag-to-Applications DMG.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APP_NAME="Porty"
+APP_NAME="Portly"
 APP_BUNDLE=".build/${APP_NAME}.app"
 DMG_STAGING=".build/dmg-staging"
 DMG_PATH=".build/${APP_NAME}.dmg"

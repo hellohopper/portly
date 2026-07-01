@@ -33,7 +33,7 @@ struct MenuContentView: View {
                 .frame(width: 90)
                 .labelsHidden()
                 Spacer()
-                Button("Quit Porty") { NSApplication.shared.terminate(nil) }
+                Button("Quit Portly") { NSApplication.shared.terminate(nil) }
             }
             .padding(8)
         }

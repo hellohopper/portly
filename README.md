@@ -1,4 +1,4 @@
-# Porty
+# Portly
 
 A native macOS menu bar app for tracking local port usage — see what's listening on your machine, which project it belongs to, and kill it or open it in your browser with one click.
 
@@ -17,15 +17,15 @@ A showcase website lives at [`docs/index.html`](docs/index.html) — open it loc
 
 ## Download
 
-Grab the latest `Porty.dmg` from the [Releases page](https://github.com/hellohopper/Porty/releases/latest), open it, and drag `Porty.app` into `Applications`.
+Grab the latest `Portly.dmg` from the [Releases page](https://github.com/hellohopper/Portly/releases/latest), open it, and drag `Portly.app` into `Applications`.
 
-Each release also publishes a `Porty.dmg.sha256` checksum (and includes the hash in the release notes) so you can verify the download:
+Each release also publishes a `Portly.dmg.sha256` checksum (and includes the hash in the release notes) so you can verify the download:
 
 ```bash
-shasum -a 256 -c Porty.dmg.sha256
+shasum -a 256 -c Portly.dmg.sha256
 ```
 
-> Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Porty.app` → **Open** → **Open** to bypass this once.
+> Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Portly.app` → **Open** → **Open** to bypass this once.
 
 ## Build from Source
 
@@ -37,15 +37,15 @@ shasum -a 256 -c Porty.dmg.sha256
 ### Steps
 
 ```bash
-git clone https://github.com/hellohopper/Porty.git
-cd Porty
+git clone https://github.com/hellohopper/Portly.git
+cd Portly
 
 # Quick dev run (shows a Dock icon, fine for iterating)
 swift run
 
 # Build a proper .app bundle (no Dock icon, menu bar only)
 ./scripts/build-app.sh release
-open .build/Porty.app
+open .build/Portly.app
 ```
 
 ## Testing
@@ -73,9 +73,9 @@ export APPLE_APP_SPECIFIC_PASSWORD="...."   # or use a stored notarytool profile
 ./scripts/notarize.sh
 ```
 
-This signs with hardened runtime, submits to Apple's notary service, and staples the ticket to the DMG. Porty is intentionally unsandboxed (it shells out to `lsof`/`ps`/`kill` to inspect and manage other processes), so no App Sandbox entitlements are requested.
+This signs with hardened runtime, submits to Apple's notary service, and staples the ticket to the DMG. Portly is intentionally unsandboxed (it shells out to `lsof`/`ps`/`kill` to inspect and manage other processes), so no App Sandbox entitlements are requested.
 
-Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/Porty/releases).
+Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/Portly/releases).
 
 ## License
 

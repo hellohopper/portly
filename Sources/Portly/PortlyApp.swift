@@ -1,11 +1,11 @@
 import SwiftUI
 
 @main
-struct PortyApp: App {
+struct PortlyApp: App {
     @StateObject private var store = PortStore()
 
     var body: some Scene {
-        MenuBarExtra("Porty", systemImage: "network") {
+        MenuBarExtra("Portly", systemImage: "network") {
             MenuContentView(store: store)
                 .onAppear { store.start() }
         }

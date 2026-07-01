@@ -1,12 +1,12 @@
 import Testing
 import Foundation
-@testable import Porty
+@testable import Portly
 
 struct GitProjectResolverTests {
 
     private func makeTempDir() throws -> URL {
         let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("PortyTests-\(UUID().uuidString)")
+            .appendingPathComponent("PortlyTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
     }

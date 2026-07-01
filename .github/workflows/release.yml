@@ -26,16 +26,16 @@ jobs:
       - name: Compute SHA-256 checksum
         id: checksum
         run: |
-          SUM=$(shasum -a 256 .build/Porty.dmg | awk '{print $1}')
+          SUM=$(shasum -a 256 .build/Portly.dmg | awk '{print $1}')
           echo "sha256=$SUM" >> "$GITHUB_OUTPUT"
-          echo "$SUM  Porty.dmg" > .build/Porty.dmg.sha256
+          echo "$SUM  Portly.dmg" > .build/Portly.dmg.sha256
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            .build/Porty.dmg
-            .build/Porty.dmg.sha256
+            .build/Portly.dmg
+            .build/Portly.dmg.sha256
           generate_release_notes: true
           draft: ${{ github.event_name == 'workflow_dispatch' }}
           append_body: |

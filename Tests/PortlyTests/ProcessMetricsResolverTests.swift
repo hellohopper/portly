@@ -1,5 +1,5 @@
 import Testing
-@testable import Porty
+@testable import Portly
 
 struct ProcessMetricsResolverTests {
 

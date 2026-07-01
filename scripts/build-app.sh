@@ -1,11 +1,11 @@
 #!/bin/bash
-# Builds the Porty Swift package and packages it into Porty.app.
+# Builds the Portly Swift package and packages it into Portly.app.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-debug}"
-APP_NAME="Porty"
+APP_NAME="Portly"
 BUILD_DIR=".build/${CONFIG}"
 APP_BUNDLE=".build/${APP_NAME}.app"
 
@@ -27,7 +27,7 @@ cp "Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
     echo "==> Signing with '${SIGN_IDENTITY}' (hardened runtime)"
     codesign --force --deep --options runtime \
-        --entitlements "Resources/Porty.entitlements" \
+        --entitlements "Resources/Portly.entitlements" \
         --sign "${SIGN_IDENTITY}" "${APP_BUNDLE}"
 else
     echo "==> Ad-hoc signing (set SIGN_IDENTITY for a notarizable build)"
