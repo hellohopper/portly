@@ -2,7 +2,7 @@
 
 A native macOS menu bar app for tracking local port usage — see what's listening on your machine, which project it belongs to, and kill it or open it in your browser with one click.
 
-Showcase website: **[hellohopper.github.io/Portly](https://hellohopper.github.io/Portly/)**
+Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io/portly/)**
 
 ![Portly screenshot](docs/assets/screenshot.png)
 
@@ -30,7 +30,7 @@ brew tap hellohopper/portly
 brew install --cask portly
 ```
 
-**Manual:** grab the latest `Portly.dmg` from the [Releases page](https://github.com/hellohopper/Portly/releases/latest), open it, and drag `Portly.app` into `Applications`.
+**Manual:** grab the latest `Portly.dmg` from the [Releases page](https://github.com/hellohopper/portly/releases/latest), open it, and drag `Portly.app` into `Applications`.
 
 Each release also publishes a `Portly.dmg.sha256` checksum (and includes the hash in the release notes) so you can verify the download:
 
@@ -50,7 +50,7 @@ shasum -a 256 -c Portly.dmg.sha256
 ### Steps
 
 ```bash
-git clone https://github.com/hellohopper/Portly.git
+git clone https://github.com/hellohopper/portly.git
 cd Portly
 
 # Quick dev run (shows a Dock icon, fine for iterating)
@@ -88,7 +88,7 @@ export APPLE_APP_SPECIFIC_PASSWORD="...."   # or use a stored notarytool profile
 
 This signs with hardened runtime, submits to Apple's notary service, and staples the ticket to the DMG. Portly is intentionally unsandboxed (it shells out to `lsof`/`ps`/`kill` to inspect and manage other processes), so no App Sandbox entitlements are requested.
 
-Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/Portly/releases).
+Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/portly/releases).
 
 ## License
 

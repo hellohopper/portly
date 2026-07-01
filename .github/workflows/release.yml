@@ -18,7 +18,8 @@ jobs:
           xcode-version: latest-stable
 
       - name: Run tests
-        run: swift test --parallel --num-workers 1
+        timeout-minutes: 5
+        run: swift test
 
       - name: Build DMG
         run: ./scripts/build-dmg.sh
