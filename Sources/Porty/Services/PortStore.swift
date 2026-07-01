@@ -34,6 +34,7 @@ final class PortStore: ObservableObject {
             let uniquePids = Array(Set(scanned.map(\.pid)))
             let uptimes = UptimeResolver.elapsedSeconds(for: uniquePids)
             let metrics = ProcessMetricsResolver.metrics(for: uniquePids)
+            let commandLines = CommandLineResolver.commandLines(for: uniquePids)
 
             var enriched: [PortInfo] = []
             enriched.reserveCapacity(scanned.count)
@@ -44,6 +45,11 @@ final class PortStore: ObservableObject {
                 info.uptimeSeconds = uptimes[info.pid]
                 info.cpuPercent = metrics[info.pid]?.cpuPercent
                 info.memPercent = metrics[info.pid]?.memPercent
+                if let commandLine = commandLines[info.pid] {
+                    info.frameworkLabel = FrameworkDetector.detect(
+                        processName: info.processName, commandLine: commandLine
+                    )
+                }
                 enriched.append(info)
             }
 
