@@ -6,6 +6,8 @@ struct PortInfo: Identifiable, Hashable {
     let proto: String        // "TCP" or "UDP"
     let processName: String
     let commandPath: String?
+    var projectName: String?
+    var gitBranch: String?
 
     var id: String { "\(pid)-\(port)-\(proto)" }
 }
