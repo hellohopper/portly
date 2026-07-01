@@ -50,9 +50,17 @@ private struct PortRow: View {
                             .clipShape(Capsule())
                     }
                 }
-                Text(verbatim: subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(verbatim: subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if let cpuPercent = info.cpuPercent {
+                        Circle()
+                            .fill(energyColor(for: cpuPercent))
+                            .frame(width: 6, height: 6)
+                            .help("Energy impact (based on CPU usage)")
+                    }
+                }
             }
             Spacer()
             if info.proto == "TCP" {
@@ -95,6 +103,17 @@ private struct PortRow: View {
         if let uptimeSeconds = info.uptimeSeconds {
             parts.append(UptimeResolver.format(uptimeSeconds))
         }
+        if let cpuPercent = info.cpuPercent, let memPercent = info.memPercent {
+            parts.append(String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent))
+        }
         return parts.joined(separator: " · ")
+    }
+
+    private func energyColor(for cpuPercent: Double) -> Color {
+        switch ProcessMetricsResolver.EnergyLevel.from(cpuPercent: cpuPercent) {
+        case .low: return .green
+        case .medium: return .yellow
+        case .high: return .red
+        }
     }
 }

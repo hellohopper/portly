@@ -31,7 +31,9 @@ final class PortStore: ObservableObject {
             let scanned = PortScanner.scan().sorted { $0.port < $1.port }
             guard let self else { return }
 
-            let uptimes = UptimeResolver.elapsedSeconds(for: Array(Set(scanned.map(\.pid))))
+            let uniquePids = Array(Set(scanned.map(\.pid)))
+            let uptimes = UptimeResolver.elapsedSeconds(for: uniquePids)
+            let metrics = ProcessMetricsResolver.metrics(for: uniquePids)
 
             var enriched: [PortInfo] = []
             enriched.reserveCapacity(scanned.count)
@@ -40,6 +42,8 @@ final class PortStore: ObservableObject {
                 info.projectName = context.projectName
                 info.gitBranch = context.gitBranch
                 info.uptimeSeconds = uptimes[info.pid]
+                info.cpuPercent = metrics[info.pid]?.cpuPercent
+                info.memPercent = metrics[info.pid]?.memPercent
                 enriched.append(info)
             }
 
