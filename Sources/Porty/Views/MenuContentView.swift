@@ -69,11 +69,20 @@ private struct PortRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
+        .contextMenu {
+            Button("Copy localhost URL") { copyLocalhostURL() }
+        }
     }
 
     private func openInBrowser() {
         guard let url = URL(string: "http://localhost:\(info.port)") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func copyLocalhostURL() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString("http://localhost:\(info.port)", forType: .string)
     }
 
     private func projectLabel(name: String, branch: String?) -> String {

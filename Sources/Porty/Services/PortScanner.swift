@@ -6,7 +6,21 @@ enum PortScanner {
         var results: [PortInfo] = []
         results.append(contentsOf: scan(protoFlag: "-iTCP", extraArgs: ["-sTCP:LISTEN"], proto: "TCP"))
         results.append(contentsOf: scan(protoFlag: "-iUDP", extraArgs: [], proto: "UDP"))
-        return results
+        return dedupe(results)
+    }
+
+    /// lsof reports the same pid/port twice when a process listens on both IPv4 and IPv6
+    /// sockets; collapse those into a single row.
+    private static func dedupe(_ entries: [PortInfo]) -> [PortInfo] {
+        var seen = Set<String>()
+        var result: [PortInfo] = []
+        for entry in entries {
+            let key = "\(entry.pid)-\(entry.port)-\(entry.proto)"
+            if seen.insert(key).inserted {
+                result.append(entry)
+            }
+        }
+        return result
     }
 
     private static func scan(protoFlag: String, extraArgs: [String], proto: String) -> [PortInfo] {
