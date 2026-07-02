@@ -14,6 +14,8 @@ struct PortInfo: Identifiable, Hashable {
     var frameworkLabel: String?
     var commandLine: String?
     var workingDirectory: String?
+    var bytesInPerSecond: Double?
+    var bytesOutPerSecond: Double?
 
     var id: String { "\(pid)-\(port)-\(proto)" }
 

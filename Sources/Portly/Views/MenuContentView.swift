@@ -353,7 +353,11 @@ private struct PortRow: View {
 
     private var secondaryLine: String? {
         guard let cpuPercent = info.cpuPercent, let memPercent = info.memPercent else { return nil }
-        return String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent)
+        var line = String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent)
+        if let bytesIn = info.bytesInPerSecond, let bytesOut = info.bytesOutPerSecond, bytesIn + bytesOut > 0 {
+            line += " · ↓\(ByteRateFormatter.format(bytesPerSecond: bytesIn)) ↑\(ByteRateFormatter.format(bytesPerSecond: bytesOut))"
+        }
+        return line
     }
 
     private func energyColor(for cpuPercent: Double) -> Color {

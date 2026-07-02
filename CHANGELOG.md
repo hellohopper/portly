@@ -3,6 +3,11 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.0] - 2026-07-02
+
+### Added
+- Live network throughput (↓/↑ bytes per second) per port, shown alongside CPU/MEM. Backed by a single long-running `nettop -d` process rather than re-launching it every poll, since `nettop` takes several seconds to start up.
+
 ## [0.3.1] - 2026-07-01
 
 ### Added
@@ -45,6 +50,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.4.0]: https://github.com/hellohopper/portly/releases/tag/v0.4.0
 [0.3.1]: https://github.com/hellohopper/portly/releases/tag/v0.3.1
 [0.3.0]: https://github.com/hellohopper/portly/releases/tag/v0.3.0
 [0.2.0]: https://github.com/hellohopper/portly/releases/tag/v0.2.0

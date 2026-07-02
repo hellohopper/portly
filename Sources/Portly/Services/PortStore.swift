@@ -26,6 +26,7 @@ final class PortStore: ObservableObject {
     private static let portLabelsDefaultsKey = "portLabels"
 
     func start() {
+        NetworkThroughputResolver.shared.start()
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -37,6 +38,7 @@ final class PortStore: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
+        NetworkThroughputResolver.shared.stop()
     }
 
     func refresh() {
@@ -59,6 +61,10 @@ final class PortStore: ObservableObject {
                 info.uptimeSeconds = uptimes[info.pid]
                 info.cpuPercent = metrics[info.pid]?.cpuPercent
                 info.memPercent = metrics[info.pid]?.memPercent
+                if let throughput = NetworkThroughputResolver.shared.throughput(for: info.pid) {
+                    info.bytesInPerSecond = throughput.bytesInPerSecond
+                    info.bytesOutPerSecond = throughput.bytesOutPerSecond
+                }
                 if let commandLine = commandLines[info.pid] {
                     info.commandLine = commandLine
                     info.frameworkLabel = FrameworkDetector.detect(

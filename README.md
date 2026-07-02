@@ -14,6 +14,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Framework-aware labeling | Recognizes Vite, Next.js, Rails, Django, Flask, FastAPI, Node, Bun, Deno, and more from the process's command line |
 | Git project context | Repo name + current branch, resolved from the process's working directory |
 | CPU / memory + energy | Live %CPU and %MEM per process, plus a color-coded (green/yellow/red) Activity Monitor-style energy indicator |
+| Network throughput | Live ↓/↑ bytes-per-second per port, alongside CPU/MEM |
 | Uptime | How long each port has been listening |
 | Kill process | One click, with a confirmation-free `SIGTERM` |
 | Reveal owning terminal | Brings Terminal.app to the front and selects the exact tab running that process |
