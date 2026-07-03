@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import Portly
+@testable import PortlyCore
 
 struct GitProjectResolverTests {
 

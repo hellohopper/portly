@@ -2,15 +2,15 @@ import Foundation
 
 /// Probes local TCP ports with an HTTP HEAD request so the UI can show whether a
 /// dev server is actually responding (and with what status), not just listening.
-actor HealthChecker {
-    static let shared = HealthChecker()
+public actor HealthChecker {
+    public static let shared = HealthChecker()
 
-    enum Category {
+    public enum Category {
         case healthy   // 2xx / 3xx
         case warning   // 4xx -- responding, but erroring on "/"
         case failing   // 5xx
 
-        static func classify(statusCode: Int) -> Category {
+        public static func classify(statusCode: Int) -> Category {
             switch statusCode {
             case ..<400: return .healthy
             case 400..<500: return .warning
@@ -41,7 +41,7 @@ actor HealthChecker {
     /// Returns the latest known HTTP status per port, probing any port whose cached
     /// result is stale. Non-HTTP ports (connection refused, handshake garbage,
     /// timeout) yield no entry.
-    func statuses(for ports: [Int]) async -> [Int: Int] {
+    public func statuses(for ports: [Int]) async -> [Int: Int] {
         let now = Date()
         let stalePorts = ports.filter { port in
             guard let entry = cache[port] else { return true }

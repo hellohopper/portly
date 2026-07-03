@@ -34,6 +34,13 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Quick restart | Kill + relaunch a process with its exact command line and working directory |
 | Custom hotkey | Rebind the global toggle shortcut (default ⌘⇧P) from Settings |
 | Per-port labels | Give any port a custom name (e.g. "staging API") that persists across launches |
+| Copy as curl | Right-click a port for a ready-to-paste `curl` command |
+| HTTP health badge | HEAD-probes each TCP port and shows the status code (green 2xx/3xx, orange 4xx, red 5xx) |
+| Process tree | See the wrapper chain (`npm → node`) and kill the whole tree in one action |
+| `.portly.json` | Check in expected port labels at a project's git root, shared with your team |
+| Port history | Rolling log of open/close events with timestamps, persisted across launches |
+| Keyboard navigation | ↑/↓ to move, Enter to open in browser, ⌘⌫ to kill, Esc to clear search |
+| CLI companion | `portly list` / `portly kill 3000` from your terminal — see [CLI](#cli) |
 
 ## Download
 
@@ -55,6 +62,22 @@ shasum -a 256 -c Portly.dmg.sha256
 > Releases are currently ad-hoc signed (not notarized — see [Packaging & Distribution](#packaging--distribution)), so on first launch macOS Gatekeeper will block it. Right-click `Portly.app` → **Open** → **Open** to bypass this once.
 
 After the first install, Portly can update itself in place: when a newer release is available, click **Download & Install** in the banner to fetch the DMG, swap the app bundle, and relaunch automatically. This only works when Portly is running from `/Applications` (true for both the Homebrew and manual install paths above) — otherwise the banner just opens the release page.
+
+## CLI
+
+A companion command-line tool ships inside the app bundle:
+
+```bash
+portly              # table of listening ports with framework/project/uptime
+portly list --json  # machine-readable output
+portly kill 3000    # SIGTERM whatever is listening on port 3000
+```
+
+Homebrew installs the `portly` command automatically. For manual installs, symlink it once:
+
+```bash
+sudo ln -s /Applications/Portly.app/Contents/MacOS/portly-cli /usr/local/bin/portly
+```
 
 ## Build from Source
 

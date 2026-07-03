@@ -3,37 +3,37 @@ import Foundation
 /// Rolling log of port open/close events, persisted as JSON so it survives
 /// relaunches. Answers "what was running on 3000 an hour ago?"
 @MainActor
-final class HistoryStore: ObservableObject {
-    struct Event: Codable, Identifiable, Equatable {
-        enum Kind: String, Codable {
+public final class HistoryStore: ObservableObject {
+    public struct Event: Codable, Identifiable, Equatable {
+        public enum Kind: String, Codable {
             case opened
             case closed
         }
 
-        var id = UUID()
-        let date: Date
-        let kind: Kind
-        let port: Int
-        let processName: String
-        let projectName: String?
+        public var id = UUID()
+        public let date: Date
+        public let kind: Kind
+        public let port: Int
+        public let processName: String
+        public let projectName: String?
     }
 
-    static let maxEvents = 300
+    public static let maxEvents = 300
 
-    @Published private(set) var events: [Event] = []
+    @Published public private(set) var events: [Event] = []
 
     private let fileURL: URL
 
     /// Default persistence location: ~/Library/Application Support/Portly/history.json.
     /// Tests inject a temp URL instead.
-    init(fileURL: URL? = nil) {
+    public init(fileURL: URL? = nil) {
         self.fileURL = fileURL ?? FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Portly/history.json")
         events = Self.load(from: self.fileURL)
     }
 
-    func record(opened: [PortInfo], closed: [PortInfo], at date: Date = Date()) {
+    public func record(opened: [PortInfo], closed: [PortInfo], at date: Date = Date()) {
         guard !opened.isEmpty || !closed.isEmpty else { return }
 
         var newEvents: [Event] = []
@@ -50,7 +50,7 @@ final class HistoryStore: ObservableObject {
         save()
     }
 
-    func clear() {
+    public func clear() {
         events = []
         save()
     }

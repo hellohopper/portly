@@ -18,6 +18,10 @@ mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
 cp "${BUILD_DIR}/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+# Companion CLI ships inside the bundle; Homebrew's cask (and manual symlinks)
+# expose it as plain `portly`. Named portly-cli because "portly" would collide
+# with "Portly" on case-insensitive filesystems.
+cp "${BUILD_DIR}/portly-cli" "${APP_BUNDLE}/Contents/MacOS/portly-cli"
 cp "Resources/Info.plist" "${APP_BUNDLE}/Contents/Info.plist"
 
 # Set SIGN_IDENTITY to a "Developer ID Application: ..." identity (see

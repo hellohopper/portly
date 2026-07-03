@@ -1,16 +1,16 @@
 import Foundation
 
-enum PortGrouping {
-    struct Section: Identifiable {
-        let title: String
-        let ports: [PortInfo]
-        var id: String { title }
+public enum PortGrouping {
+    public struct Section: Identifiable {
+        public let title: String
+        public let ports: [PortInfo]
+        public var id: String { title }
     }
 
     /// Pinned ports (by port number) form their own section at the top, regardless
     /// of project. Everything else is grouped by project name, alphabetically,
     /// with ports lacking a resolved project falling into "Other" at the end.
-    static func sections(for ports: [PortInfo], pinned: Set<Int>) -> [Section] {
+    public static func sections(for ports: [PortInfo], pinned: Set<Int>) -> [Section] {
         var sections: [Section] = []
 
         let pinnedPorts = ports.filter { pinned.contains($0.port) }.sorted { $0.port < $1.port }

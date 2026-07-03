@@ -1,10 +1,10 @@
 import Foundation
 
-enum CommandLineResolver {
+public enum CommandLineResolver {
 
     /// Batch-resolves the full (untruncated) command line for the given pids using a
     /// single `ps` call, so framework detection can inspect args like `vite` or `next dev`.
-    static func commandLines(for pids: [Int32]) -> [Int32: String] {
+    public static func commandLines(for pids: [Int32]) -> [Int32: String] {
         guard !pids.isEmpty else { return [:] }
 
         let pidList = pids.map(String.init).joined(separator: ",")

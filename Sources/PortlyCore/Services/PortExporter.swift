@@ -1,15 +1,15 @@
 import Foundation
 
-enum PortExporter {
-    enum Format: String, CaseIterable, Identifiable {
+public enum PortExporter {
+    public enum Format: String, CaseIterable, Identifiable {
         case json
         case csv
 
-        var id: String { rawValue }
-        var fileExtension: String { rawValue }
+        public var id: String { rawValue }
+        public var fileExtension: String { rawValue }
     }
 
-    static func export(_ ports: [PortInfo], format: Format) -> Data {
+    public static func export(_ ports: [PortInfo], format: Format) -> Data {
         switch format {
         case .json:
             return exportJSON(ports)

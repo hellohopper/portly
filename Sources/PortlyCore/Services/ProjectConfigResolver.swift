@@ -6,8 +6,8 @@ import Foundation
 ///     { "labels": { "3000": "web frontend", "8000": "api" } }
 ///
 /// A user's manually-set label always wins over the file's.
-final class ProjectConfigResolver: @unchecked Sendable {
-    static let shared = ProjectConfigResolver()
+public final class ProjectConfigResolver: @unchecked Sendable {
+    public static let shared = ProjectConfigResolver()
 
     static let fileName = ".portly.json"
 
@@ -17,7 +17,7 @@ final class ProjectConfigResolver: @unchecked Sendable {
     /// Labels from the `.portly.json` at the git root above `directory` (or at
     /// `directory` itself when it isn't in a git repo). Cached by file mtime, so
     /// edits to the file are picked up on the next refresh.
-    func labels(fromDirectory directory: String) -> [Int: String] {
+    public func labels(fromDirectory directory: String) -> [Int: String] {
         let root = GitProjectResolver.findGitDir(startingAt: directory)?.deletingLastPathComponent()
             ?? URL(fileURLWithPath: directory)
         let configURL = root.appendingPathComponent(Self.fileName)

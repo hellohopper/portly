@@ -1,13 +1,15 @@
 import Foundation
 
-enum GitProjectResolver {
+public enum GitProjectResolver {
 
     /// Resolves the working directory of a process, then walks up to find a git repo
     /// and returns (projectName, branchName). Returns nil fields when not applicable.
-    static func resolve(pid: Int32) -> (projectName: String?, gitBranch: String?) {
+    public static func resolve(pid: Int32) -> (projectName: String?, gitBranch: String?) {
         guard let cwd = currentWorkingDirectory(of: pid) else { return (nil, nil) }
         guard let gitDir = findGitDir(startingAt: cwd) else {
-            return (URL(fileURLWithPath: cwd).lastPathComponent, nil)
+            // Daemons run from "/" -- a bare slash is not a meaningful project name.
+            let name = URL(fileURLWithPath: cwd).lastPathComponent
+            return (name == "/" ? nil : name, nil)
         }
 
         let projectRoot = gitDir.deletingLastPathComponent()
@@ -18,7 +20,7 @@ enum GitProjectResolver {
 
     /// Public entry point for callers (e.g. quick-restart) that just need the cwd,
     /// without the git project/branch resolution.
-    static func workingDirectory(of pid: Int32) -> String? {
+    public static func workingDirectory(of pid: Int32) -> String? {
         currentWorkingDirectory(of: pid)
     }
 

@@ -1,5 +1,5 @@
 import Testing
-@testable import Portly
+@testable import PortlyCore
 
 struct FrameworkDetectorTests {
 

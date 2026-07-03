@@ -1,11 +1,11 @@
 import Foundation
 
-enum FrameworkDetector {
+public enum FrameworkDetector {
 
     /// Maps a raw process name + full command line to a friendly framework label,
     /// mirroring the "smart filtering" Ports App advertises (Node/Vite/Next/Python/
     /// Rails/Go/Bun/Deno, etc.). Returns nil when nothing recognizable matches.
-    static func detect(processName: String, commandLine: String) -> String? {
+    public static func detect(processName: String, commandLine: String) -> String? {
         let command = commandLine.lowercased()
 
         // Order matters: check specific dev-tool signatures in a command line

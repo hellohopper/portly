@@ -6,12 +6,12 @@ import Foundation
 /// refresh (like the other `ps`-based resolvers do) isn't viable. Instead this keeps a
 /// single `nettop -d` (delta mode, continuous logging) process running for the app's
 /// lifetime and re-parses each new sample block as it streams in.
-final class NetworkThroughputResolver: @unchecked Sendable {
-    static let shared = NetworkThroughputResolver()
+public final class NetworkThroughputResolver: @unchecked Sendable {
+    public static let shared = NetworkThroughputResolver()
 
-    struct Throughput {
-        let bytesInPerSecond: Double
-        let bytesOutPerSecond: Double
+    public struct Throughput {
+        public let bytesInPerSecond: Double
+        public let bytesOutPerSecond: Double
     }
 
     private let sampleIntervalSeconds: Double = 2
@@ -28,7 +28,7 @@ final class NetworkThroughputResolver: @unchecked Sendable {
 
     private init() {}
 
-    func start() {
+    public func start() {
         lock.lock()
         defer { lock.unlock() }
         guard process == nil else { return }
@@ -59,7 +59,7 @@ final class NetworkThroughputResolver: @unchecked Sendable {
         }
     }
 
-    func stop() {
+    public func stop() {
         lock.lock()
         let taskToStop = process
         process = nil
@@ -67,7 +67,7 @@ final class NetworkThroughputResolver: @unchecked Sendable {
         taskToStop?.terminate()
     }
 
-    func throughput(for pid: Int32) -> Throughput? {
+    public func throughput(for pid: Int32) -> Throughput? {
         lock.lock()
         defer { lock.unlock() }
         return latest[pid]

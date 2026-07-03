@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Portly
+@testable import PortlyCore
 
 struct PortExporterTests {
 

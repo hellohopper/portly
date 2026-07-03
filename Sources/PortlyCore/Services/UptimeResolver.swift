@@ -1,9 +1,9 @@
 import Foundation
 
-enum UptimeResolver {
+public enum UptimeResolver {
 
     /// Batch-resolves elapsed running time (in seconds) for the given pids using a single `ps` call.
-    static func elapsedSeconds(for pids: [Int32]) -> [Int32: Int] {
+    public static func elapsedSeconds(for pids: [Int32]) -> [Int32: Int] {
         guard !pids.isEmpty else { return [:] }
 
         let pidList = pids.map(String.init).joined(separator: ",")
@@ -58,7 +58,7 @@ enum UptimeResolver {
     }
 
     /// Formats seconds into a compact human string, e.g. "2m", "1h 3m", "3d 2h".
-    static func format(_ seconds: Int) -> String {
+    public static func format(_ seconds: Int) -> String {
         let days = seconds / 86400
         let hours = (seconds % 86400) / 3600
         let minutes = (seconds % 3600) / 60
