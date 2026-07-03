@@ -18,4 +18,14 @@ struct ByteRateFormatterTests {
     @Test func formatsZero() {
         #expect(ByteRateFormatter.format(bytesPerSecond: 0) == "0B/s")
     }
+
+    @Test func formatsGigabytesWithoutOverflowingUnits() {
+        #expect(ByteRateFormatter.format(bytesPerSecond: 2_500_000_000) == "2.3GB/s")
+        // Values beyond GB stay in GB (last defined unit) rather than crashing.
+        #expect(ByteRateFormatter.format(bytesPerSecond: 5_000_000_000_000) == "4656.6GB/s")
+    }
+
+    @Test func formatsExactUnitBoundary() {
+        #expect(ByteRateFormatter.format(bytesPerSecond: 1024) == "1.0KB/s")
+    }
 }

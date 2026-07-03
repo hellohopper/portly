@@ -38,4 +38,16 @@ struct NettopLineParserTests {
     @Test func returnsNilWhenTooFewFields() {
         #expect(NettopLineParser.parseDataLine("00:39:57.871638,apsd.576") == nil)
     }
+
+    // Regression: nettop's CSV output doesn't escape commas inside process names,
+    // which shifts the column positions. Parsing must anchor on the end of the line.
+    @Test func parsesProcessNameContainingCommas() {
+        let sample = NettopLineParser.parseDataLine("00:39:57.871638,Helper (Foo, Bar).4242,120,340,")
+        #expect(sample == NettopLineParser.Sample(pid: 4242, bytesIn: 120, bytesOut: 340))
+    }
+
+    @Test func parsesLineWithoutTrailingComma() {
+        let sample = NettopLineParser.parseDataLine("00:39:57.871638,apsd.576,120,340")
+        #expect(sample == NettopLineParser.Sample(pid: 576, bytesIn: 120, bytesOut: 340))
+    }
 }

@@ -23,6 +23,35 @@ struct PortScannerTests {
         #expect(PortScanner.extractPort(from: "no-colon-here") == nil)
     }
 
+    @Test func extractPortReturnsNilForUnboundUDPSocket() {
+        // lsof reports fully-unbound UDP sockets as "*:*".
+        #expect(PortScanner.extractPort(from: "*:*") == nil)
+    }
+
+    @Test func mergeIsIdempotentAcrossRepeatedProtocols() {
+        // A pid+port pair appearing more than twice must not grow "TCP+UDP+UDP".
+        let entries = [
+            PortInfo(pid: 100, port: 53, proto: "TCP", processName: "dnsd", commandPath: nil),
+            PortInfo(pid: 100, port: 53, proto: "UDP", processName: "dnsd", commandPath: nil),
+            PortInfo(pid: 100, port: 53, proto: "UDP", processName: "dnsd", commandPath: nil)
+        ]
+
+        let merged = PortScanner.mergeSamePidAndPort(entries)
+
+        #expect(merged.count == 1)
+        #expect(merged.first?.proto == "TCP+UDP")
+    }
+
+    @Test func mergePreservesFirstSeenOrder() {
+        let entries = [
+            PortInfo(pid: 100, port: 8000, proto: "TCP", processName: "python", commandPath: nil),
+            PortInfo(pid: 200, port: 3000, proto: "TCP", processName: "node", commandPath: nil),
+            PortInfo(pid: 100, port: 8000, proto: "UDP", processName: "python", commandPath: nil)
+        ]
+
+        #expect(PortScanner.mergeSamePidAndPort(entries).map(\.port) == [8000, 3000])
+    }
+
     @Test func dedupeCollapsesSameProcessOnIPv4AndIPv6() {
         let entries = [
             PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil),

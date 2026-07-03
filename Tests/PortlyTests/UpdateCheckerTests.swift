@@ -26,4 +26,10 @@ struct UpdateCheckerTests {
         #expect(UpdateChecker.isVersion("1.0", newerThan: "0.9.9"))
         #expect(!UpdateChecker.isVersion("0.9", newerThan: "0.9.1"))
     }
+
+    @Test func trailingZeroComponentsAreEquivalent() {
+        // "0.4" and "0.4.0" are the same version; neither is newer.
+        #expect(!UpdateChecker.isVersion("0.4", newerThan: "0.4.0"))
+        #expect(!UpdateChecker.isVersion("0.4.0", newerThan: "0.4"))
+    }
 }
