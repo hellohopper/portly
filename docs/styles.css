@@ -136,104 +136,12 @@ main {
   padding: 24px 0 80px;
 }
 
-.menubar-mockup {
-  width: 380px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
+.app-screenshot {
+  max-width: min(428px, 92vw);
+  height: auto;
   border-radius: var(--radius);
-  overflow: hidden;
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
 }
-
-.mockup-titlebar {
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  border-bottom: 1px solid var(--border);
-}
-
-.mockup-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 10px 14px;
-}
-
-.mockup-row-text { flex: 1; min-width: 0; }
-
-.mockup-row-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 2px;
-}
-
-.mockup-port {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-weight: 700;
-  font-size: 14px;
-}
-
-.mockup-badge {
-  font-size: 11px;
-  color: var(--text-secondary);
-  background: rgba(255, 255, 255, 0.08);
-  padding: 1px 7px;
-  border-radius: 10px;
-}
-
-.mockup-row-mid {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.mockup-row-bottom {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  color: var(--text-secondary);
-  margin-top: 2px;
-}
-
-.mockup-actions {
-  font-size: 13px;
-  color: var(--text-secondary);
-  letter-spacing: 4px;
-  padding-top: 2px;
-}
-
-.mockup-divider {
-  height: 1px;
-  background: var(--border);
-}
-
-.mockup-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px;
-  font-size: 12px;
-  color: var(--text-secondary);
-  border-top: 1px solid var(--border);
-}
-
-.mockup-theme { letter-spacing: 4px; }
-
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-top: 4px;
-  flex-shrink: 0;
-}
-
-.dot-tiny { width: 6px; height: 6px; margin-top: 0; }
-
-.dot-green { background: var(--green); }
-.dot-yellow { background: var(--yellow); }
-.dot-red { background: var(--red); }
 
 .features { padding: 40px 0 80px; }
 
@@ -318,5 +226,4 @@ main {
 @media (max-width: 720px) {
   .feature-grid { grid-template-columns: 1fr; }
   .hero h1 { font-size: 32px; }
-  .menubar-mockup { width: 100%; }
 }
