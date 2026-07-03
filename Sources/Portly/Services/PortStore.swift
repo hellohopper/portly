@@ -23,6 +23,13 @@ final class PortStore: ObservableObject {
     @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
     /// port -> latest HTTP status code from the health probe (absent = not an HTTP server).
     @Published private(set) var healthStatuses: [Int: Int] = [:]
+    /// port -> label contributed by a project's .portly.json; user labels take precedence.
+    @Published private(set) var projectConfigLabels: [Int: String] = [:]
+
+    /// The label to show for a port: the user's manual label wins over .portly.json.
+    func effectiveLabel(for port: Int) -> String? {
+        portLabels[port] ?? projectConfigLabels[port]
+    }
 
     private static let ignoredProcessNamesDefaultsKey = "ignoredProcessNames"
     private static let portLabelsDefaultsKey = "portLabels"
@@ -78,6 +85,13 @@ final class PortStore: ObservableObject {
                 enriched.append(info)
             }
 
+            var configLabels: [Int: String] = [:]
+            for directory in Set(enriched.compactMap(\.workingDirectory)) {
+                // First project to label a port wins; overlaps across projects are rare.
+                configLabels.merge(ProjectConfigResolver.shared.labels(fromDirectory: directory)) { current, _ in current }
+            }
+            let finalConfigLabels = configLabels
+
             let allEnriched = enriched
             await MainActor.run {
                 let finalEnriched = allEnriched.filter {
@@ -100,6 +114,7 @@ final class PortStore: ObservableObject {
                 self.hasCompletedInitialScan = true
 
                 self.ports = finalEnriched
+                self.projectConfigLabels = finalConfigLabels
                 let livePids = Set(finalEnriched.map(\.pid))
                 self.projectContextCache = self.projectContextCache.filter { livePids.contains($0.key) }
 

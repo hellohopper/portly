@@ -19,10 +19,10 @@ struct MenuContentView: View {
 
     private func matchesSearch(_ info: PortInfo) -> Bool {
         if info.matches(query: searchText) { return true }
-        // Custom labels live in the store (keyed by port), not on PortInfo, so they
-        // need their own check to be searchable.
+        // Labels (manual or .portly.json) live in the store keyed by port, not on
+        // PortInfo, so they need their own check to be searchable.
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !needle.isEmpty, let label = store.portLabels[info.port] else { return false }
+        guard !needle.isEmpty, let label = store.effectiveLabel(for: info.port) else { return false }
         return label.lowercased().contains(needle)
     }
 
@@ -67,7 +67,7 @@ struct MenuContentView: View {
                                     isPinned: store.pinnedPorts.contains(port.port),
                                     isSelecting: isSelecting,
                                     isSelected: selectedPorts.contains(port.port),
-                                    label: store.portLabels[port.port],
+                                    label: store.effectiveLabel(for: port.port),
                                     healthStatus: store.healthStatuses[port.port],
                                     onKill: { store.kill(port) },
                                     onKillTree: { store.killTree(port) },
