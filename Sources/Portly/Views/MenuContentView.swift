@@ -324,6 +324,9 @@ private struct PortRow: View {
         }
         .contextMenu {
             Button("Copy localhost URL") { copyLocalhostURL() }
+            if info.proto.contains("TCP") {
+                Button("Copy as curl") { copyToPasteboard(CurlCommandBuilder.command(port: info.port)) }
+            }
             Button("Ignore \(info.processName)", action: onIgnore)
         }
     }
@@ -344,9 +347,13 @@ private struct PortRow: View {
     }
 
     private func copyLocalhostURL() {
+        copyToPasteboard("http://localhost:\(info.port)")
+    }
+
+    private func copyToPasteboard(_ string: String) {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        pasteboard.setString("http://localhost:\(info.port)", forType: .string)
+        pasteboard.setString(string, forType: .string)
     }
 
     private func projectLabel(name: String, branch: String?) -> String {
