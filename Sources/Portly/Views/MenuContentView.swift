@@ -14,7 +14,16 @@ struct MenuContentView: View {
     }
 
     private var filteredPorts: [PortInfo] {
-        store.ports.filter { $0.matches(query: searchText) }
+        store.ports.filter { matchesSearch($0) }
+    }
+
+    private func matchesSearch(_ info: PortInfo) -> Bool {
+        if info.matches(query: searchText) { return true }
+        // Custom labels live in the store (keyed by port), not on PortInfo, so they
+        // need their own check to be searchable.
+        let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty, let label = store.portLabels[info.port] else { return false }
+        return label.lowercased().contains(needle)
     }
 
     private var sections: [PortGrouping.Section] {
@@ -125,7 +134,9 @@ struct MenuContentView: View {
     }
 
     private func killSelected() {
-        let toKill = filteredPorts.filter { selectedPorts.contains($0.port) }
+        // Kill from the full port list, not the filtered view -- the button's count
+        // includes every selected row, even ones a later search has hidden.
+        let toKill = store.ports.filter { selectedPorts.contains($0.port) }
         store.kill(toKill)
         exitSelectionMode()
     }

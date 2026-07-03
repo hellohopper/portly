@@ -44,4 +44,21 @@ struct PortDifferTests {
         #expect(diff.newPorts.isEmpty)
         #expect(diff.deadPinnedPorts.isEmpty)
     }
+
+    @Test func pinnedPortSurvivesPidChange() {
+        // Diffing is by port number, so a dev-server restart (new pid, same port)
+        // within one poll interval is neither "new" nor "died".
+        let old = [PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil)]
+        let new = [PortInfo(pid: 999, port: 3000, proto: "TCP", processName: "node", commandPath: nil)]
+
+        let diff = PortDiffer.diff(old: old, new: new, pinned: [3000])
+
+        #expect(diff.newPorts.isEmpty)
+        #expect(diff.deadPinnedPorts.isEmpty)
+    }
+
+    @Test func everythingIsNewWhenOldIsEmpty() {
+        let diff = PortDiffer.diff(old: [], new: [makeInfo(port: 3000)], pinned: [])
+        #expect(diff.newPorts.map(\.port) == [3000])
+    }
 }

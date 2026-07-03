@@ -83,8 +83,13 @@ final class PortStore: ObservableObject {
                 if self.hasCompletedInitialScan {
                     let diff = PortDiffer.diff(old: self.ports, new: finalEnriched, pinned: self.pinnedPorts)
                     diff.newPorts.forEach(NotificationManager.notifyNewPort)
-                    if !diff.deadPinnedPorts.isEmpty {
-                        diff.deadPinnedPorts.forEach(NotificationManager.notifyPinnedPortDied)
+                    // A pinned port that vanished because its process was just added to
+                    // the ignore list didn't actually die -- don't alert on those.
+                    let trulyDead = diff.deadPinnedPorts.filter {
+                        !self.ignoredProcessNames.contains($0.processName.lowercased())
+                    }
+                    if !trulyDead.isEmpty {
+                        trulyDead.forEach(NotificationManager.notifyPinnedPortDied)
                         self.hasAlert = true
                     }
                 }

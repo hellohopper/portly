@@ -19,6 +19,15 @@ struct UptimeResolverTests {
         #expect(UptimeResolver.parseElapsed("not-a-time") == nil)
     }
 
+    @Test func parseElapsedReturnsNilForSingleComponent() {
+        // etime is always at least mm:ss; a bare number is malformed.
+        #expect(UptimeResolver.parseElapsed("42") == nil)
+    }
+
+    @Test func parseElapsedHandlesSurroundingWhitespace() {
+        #expect(UptimeResolver.parseElapsed("   02:30 ") == 150)
+    }
+
     @Test func formatUnderAMinute() {
         #expect(UptimeResolver.format(45) == "45s")
     }

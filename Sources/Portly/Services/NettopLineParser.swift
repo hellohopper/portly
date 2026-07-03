@@ -21,14 +21,22 @@ enum NettopLineParser {
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty, !isHeaderLine(trimmed) else { return nil }
 
-        let fields = trimmed.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
-        // Fields: time, "processName.pid", bytes_in, bytes_out, (trailing empty)
+        // Fields: time, "processName.pid", bytes_in, bytes_out, (trailing empty).
+        // Process names can contain commas (nettop doesn't escape them), which shifts
+        // the column positions -- so anchor on the *end* of the line, not fixed indexes.
+        var fields = trimmed.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+        if fields.last?.isEmpty == true {
+            fields.removeLast()
+        }
         guard fields.count >= 4 else { return nil }
 
-        let processAndPid = fields[1]
+        // The pid is the last dot-separated segment of the name column, whose final
+        // fragment sits just before bytes_in even when the name itself had commas.
+        let processAndPid = fields[fields.count - 3]
         guard let lastDot = processAndPid.lastIndex(of: "."),
               let pid = Int32(processAndPid[processAndPid.index(after: lastDot)...]) else { return nil }
-        guard let bytesIn = Double(fields[2]), let bytesOut = Double(fields[3]) else { return nil }
+        guard let bytesIn = Double(fields[fields.count - 2]),
+              let bytesOut = Double(fields[fields.count - 1]) else { return nil }
 
         return Sample(pid: pid, bytesIn: bytesIn, bytesOut: bytesOut)
     }

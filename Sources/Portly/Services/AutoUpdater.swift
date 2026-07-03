@@ -57,9 +57,26 @@ enum AutoUpdater {
             return
         }
 
+        // replaceItemAt moves (not copies) the new item into place, and a move off the
+        // read-only DMG mount fails at its delete-source step -- stage a writable copy
+        // in the temp directory first.
+        let stagedApp = FileManager.default.temporaryDirectory
+            .appendingPathComponent("PortlyUpdateStaging-\(UUID().uuidString)")
+            .appendingPathComponent("Portly.app")
+        do {
+            try FileManager.default.createDirectory(
+                at: stagedApp.deletingLastPathComponent(), withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: sourceApp, to: stagedApp)
+        } catch {
+            onPhaseChange(.failed("Could not stage the update (\(error.localizedDescription))"))
+            return
+        }
+        defer { try? FileManager.default.removeItem(at: stagedApp.deletingLastPathComponent()) }
+
         let destinationApp = URL(fileURLWithPath: currentBundlePath)
         do {
-            _ = try FileManager.default.replaceItemAt(destinationApp, withItemAt: sourceApp)
+            _ = try FileManager.default.replaceItemAt(destinationApp, withItemAt: stagedApp)
         } catch {
             onPhaseChange(.failed("Could not replace the app bundle (\(error.localizedDescription))"))
             return

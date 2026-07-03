@@ -67,7 +67,7 @@ After the first install, Portly can update itself in place: when a newer release
 
 ```bash
 git clone https://github.com/hellohopper/portly.git
-cd Portly
+cd portly
 
 # Quick dev run (shows a Dock icon, fine for iterating)
 swift run
@@ -104,7 +104,7 @@ export APPLE_APP_SPECIFIC_PASSWORD="...."   # or use a stored notarytool profile
 
 This signs with hardened runtime, submits to Apple's notary service, and staples the ticket to the DMG. Portly is intentionally unsandboxed (it shells out to `lsof`/`ps`/`kill` to inspect and manage other processes), so no App Sandbox entitlements are requested.
 
-Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which runs the test suite, builds the DMG, and publishes it to [Releases](https://github.com/hellohopper/portly/releases).
+Pushing a `v*.*.*` tag triggers [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds the DMG and publishes it to [Releases](https://github.com/hellohopper/portly/releases). Tests run separately in [`.github/workflows/tests.yml`](.github/workflows/tests.yml) on every push/PR to `main`; the release workflow assumes the tagged commit already passed `swift test` locally.
 
 ## Changelog
 
