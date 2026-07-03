@@ -3,6 +3,23 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.0] - 2026-07-03
+
+### Added
+- `portly` CLI companion, shipped inside the app bundle — `portly list` (table or `--json`), `portly kill <port>`. Homebrew installs the command automatically; manual installs can symlink `Portly.app/Contents/MacOS/portly-cli`
+- HTTP health badge — TCP ports are HEAD-probed and show their status code (green 2xx/3xx, orange 4xx, red 5xx)
+- Process tree context — rows show their wrapper chain (e.g. `npm → node`) as a tooltip, with a "Kill process tree" context-menu action that never touches shells or terminals
+- `.portly.json` project config — check in `{ "labels": { "3000": "web frontend" } }` at a repo's root to auto-label ports for the whole team (manual labels still win)
+- Port history — rolling log of open/close events with timestamps, persisted across launches, behind a clock icon in the footer
+- Keyboard navigation — ↑/↓ move a highlighted row (works while searching), Enter opens in browser, ⌘⌫ kills, Esc clears the search
+- "Copy as curl" context-menu action
+
+### Changed
+- Shared scanning/enrichment logic split into a PortlyCore library backing both the app and the CLI
+
+### Fixed
+- Daemons running from `/` no longer show a bogus "/" project badge
+
 ## [0.4.1] - 2026-07-03
 
 ### Fixed
@@ -59,6 +76,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.5.0]: https://github.com/hellohopper/portly/releases/tag/v0.5.0
 [0.4.1]: https://github.com/hellohopper/portly/releases/tag/v0.4.1
 [0.4.0]: https://github.com/hellohopper/portly/releases/tag/v0.4.0
 [0.3.1]: https://github.com/hellohopper/portly/releases/tag/v0.3.1
