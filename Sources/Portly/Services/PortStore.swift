@@ -21,6 +21,8 @@ final class PortStore: ObservableObject {
     @Published var portLabels: [Int: String] = PortStore.loadPortLabels()
     @Published var hasAlert: Bool = false
     @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
+    /// port -> latest HTTP status code from the health probe (absent = not an HTTP server).
+    @Published private(set) var healthStatuses: [Int: Int] = [:]
 
     private static let ignoredProcessNamesDefaultsKey = "ignoredProcessNames"
     private static let portLabelsDefaultsKey = "portLabels"
@@ -98,7 +100,16 @@ final class PortStore: ObservableObject {
                 self.ports = finalEnriched
                 let livePids = Set(finalEnriched.map(\.pid))
                 self.projectContextCache = self.projectContextCache.filter { livePids.contains($0.key) }
+
+                self.refreshHealthStatuses(for: finalEnriched)
             }
+        }
+    }
+
+    private func refreshHealthStatuses(for ports: [PortInfo]) {
+        let tcpPorts = ports.filter { $0.proto.contains("TCP") }.map(\.port)
+        Task {
+            self.healthStatuses = await HealthChecker.shared.statuses(for: tcpPorts)
         }
     }
 

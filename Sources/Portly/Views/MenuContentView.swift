@@ -68,6 +68,7 @@ struct MenuContentView: View {
                                     isSelecting: isSelecting,
                                     isSelected: selectedPorts.contains(port.port),
                                     label: store.portLabels[port.port],
+                                    healthStatus: store.healthStatuses[port.port],
                                     onKill: { store.kill(port) },
                                     onTogglePin: { store.togglePin(port.port) },
                                     onToggleSelect: { toggleSelection(port.port) },
@@ -203,6 +204,7 @@ private struct PortRow: View {
     let isSelecting: Bool
     let isSelected: Bool
     let label: String?
+    let healthStatus: Int?
     let onKill: () -> Void
     let onTogglePin: () -> Void
     let onToggleSelect: () -> Void
@@ -231,6 +233,16 @@ private struct PortRow: View {
                 HStack(spacing: 6) {
                     Text(verbatim: "\(info.port)")
                         .font(.system(.body, design: .monospaced).bold())
+                    if let healthStatus {
+                        Text(verbatim: "\(healthStatus)")
+                            .font(.system(.caption2, design: .monospaced).bold())
+                            .foregroundStyle(healthColor(for: healthStatus))
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(healthColor(for: healthStatus).opacity(0.15))
+                            .clipShape(Capsule())
+                            .help("HTTP status from probing localhost:\(info.port)")
+                    }
                     if info.isDockerManaged {
                         Image(systemName: "shippingbox.fill")
                             .font(.caption2)
@@ -383,6 +395,14 @@ private struct PortRow: View {
         case .low: return .green
         case .medium: return .yellow
         case .high: return .red
+        }
+    }
+
+    private func healthColor(for statusCode: Int) -> Color {
+        switch HealthChecker.Category.classify(statusCode: statusCode) {
+        case .healthy: return .green
+        case .warning: return .orange
+        case .failing: return .red
         }
     }
 }
