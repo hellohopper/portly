@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PortInfo: Identifiable, Hashable {
+public struct PortInfo: Identifiable, Hashable, Sendable {
     public let pid: Int32
     public let port: Int
     public var proto: String        // "TCP", "UDP", or "TCP+UDP" once merged

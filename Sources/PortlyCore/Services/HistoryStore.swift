@@ -4,8 +4,8 @@ import Foundation
 /// relaunches. Answers "what was running on 3000 an hour ago?"
 @MainActor
 public final class HistoryStore: ObservableObject {
-    public struct Event: Codable, Identifiable, Equatable {
-        public enum Kind: String, Codable {
+    public struct Event: Codable, Identifiable, Equatable, Sendable {
+        public enum Kind: String, Codable, Sendable {
             case opened
             case closed
         }

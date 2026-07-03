@@ -9,7 +9,7 @@ import Foundation
 public final class NetworkThroughputResolver: @unchecked Sendable {
     public static let shared = NetworkThroughputResolver()
 
-    public struct Throughput {
+    public struct Throughput: Sendable {
         public let bytesInPerSecond: Double
         public let bytesOutPerSecond: Double
     }

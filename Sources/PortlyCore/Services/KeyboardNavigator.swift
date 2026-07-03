@@ -3,7 +3,7 @@ import Foundation
 /// Pure focus-movement logic for arrow-key navigation through the visible port
 /// list, kept separate from the NSEvent plumbing so it can be unit tested.
 public enum KeyboardNavigator {
-    public enum Direction {
+    public enum Direction: Sendable {
         case down
         case up
     }

@@ -4,7 +4,7 @@ import Foundation
 /// dev servers can be understood -- and killed -- at the root instead of just the leaf.
 public enum ProcessTreeResolver {
 
-    public struct Entry: Hashable {
+    public struct Entry: Hashable, Sendable {
         public let pid: Int32
         public let name: String
     }

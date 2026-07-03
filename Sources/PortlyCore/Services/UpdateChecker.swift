@@ -1,7 +1,7 @@
 import Foundation
 
 public enum UpdateChecker {
-    public struct UpdateInfo {
+    public struct UpdateInfo: Sendable {
         public let version: String
         public let url: URL
         /// Direct download URL for the release's Portly.dmg asset, when published.

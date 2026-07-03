@@ -1,7 +1,7 @@
 import Foundation
 
 public enum PortGrouping {
-    public struct Section: Identifiable {
+    public struct Section: Identifiable, Sendable {
         public let title: String
         public let ports: [PortInfo]
         public var id: String { title }

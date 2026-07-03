@@ -1,7 +1,7 @@
 import Foundation
 
 public enum PortDiffer {
-    public struct Diff {
+    public struct Diff: Sendable {
         public let newPorts: [PortInfo]
         /// Every port that disappeared since the previous scan.
         public let closedPorts: [PortInfo]

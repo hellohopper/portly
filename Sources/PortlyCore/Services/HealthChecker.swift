@@ -5,7 +5,7 @@ import Foundation
 public actor HealthChecker {
     public static let shared = HealthChecker()
 
-    public enum Category {
+    public enum Category: Sendable {
         case healthy   // 2xx / 3xx
         case warning   // 4xx -- responding, but erroring on "/"
         case failing   // 5xx

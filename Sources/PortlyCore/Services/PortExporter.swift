@@ -1,7 +1,7 @@
 import Foundation
 
 public enum PortExporter {
-    public enum Format: String, CaseIterable, Identifiable {
+    public enum Format: String, CaseIterable, Identifiable, Sendable {
         case json
         case csv
 
