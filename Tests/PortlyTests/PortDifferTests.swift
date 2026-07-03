@@ -61,4 +61,24 @@ struct PortDifferTests {
         let diff = PortDiffer.diff(old: [], new: [makeInfo(port: 3000)], pinned: [])
         #expect(diff.newPorts.map(\.port) == [3000])
     }
+
+    @Test func closedPortsIncludeUnpinnedDisappearances() {
+        let old = [makeInfo(port: 3000), makeInfo(port: 8000)]
+        let new = [makeInfo(port: 3000)]
+
+        let diff = PortDiffer.diff(old: old, new: new, pinned: [])
+
+        #expect(diff.closedPorts.map(\.port) == [8000])
+        #expect(diff.deadPinnedPorts.isEmpty)
+    }
+
+    @Test func deadPinnedPortsAreSubsetOfClosedPorts() {
+        let old = [makeInfo(port: 3000), makeInfo(port: 8000)]
+        let new: [PortInfo] = []
+
+        let diff = PortDiffer.diff(old: old, new: new, pinned: [8000])
+
+        #expect(diff.closedPorts.map(\.port) == [3000, 8000])
+        #expect(diff.deadPinnedPorts.map(\.port) == [8000])
+    }
 }

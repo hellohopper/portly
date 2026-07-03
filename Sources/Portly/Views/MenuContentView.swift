@@ -8,6 +8,7 @@ struct MenuContentView: View {
     @State private var isSelecting: Bool = false
     @State private var selectedPorts: Set<Int> = []
     @State private var isSettingsPresented: Bool = false
+    @State private var isHistoryPresented: Bool = false
 
     private var theme: AppTheme {
         AppTheme(rawValue: themeRawValue) ?? .system
@@ -110,6 +111,13 @@ struct MenuContentView: View {
                     .pickerStyle(.segmented)
                     .frame(width: 90)
                     .labelsHidden()
+                    Button(action: { isHistoryPresented.toggle() }) {
+                        Image(systemName: "clock.arrow.circlepath")
+                    }
+                    .help("Port history")
+                    .popover(isPresented: $isHistoryPresented) {
+                        HistoryView(history: store.history)
+                    }
                     Button(action: { isSettingsPresented.toggle() }) {
                         Image(systemName: "gearshape")
                     }

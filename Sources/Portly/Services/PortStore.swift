@@ -4,6 +4,8 @@ import AppKit
 
 @MainActor
 final class PortStore: ObservableObject {
+    let history = HistoryStore()
+
     @Published private(set) var ports: [PortInfo] = []
     @Published private(set) var pinnedPorts: Set<Int> = PortStore.loadPinnedPorts()
     @Published private(set) var availableUpdate: UpdateChecker.UpdateInfo?
@@ -100,6 +102,7 @@ final class PortStore: ObservableObject {
 
                 if self.hasCompletedInitialScan {
                     let diff = PortDiffer.diff(old: self.ports, new: finalEnriched, pinned: self.pinnedPorts)
+                    self.history.record(opened: diff.newPorts, closed: diff.closedPorts)
                     diff.newPorts.forEach(NotificationManager.notifyNewPort)
                     // A pinned port that vanished because its process was just added to
                     // the ignore list didn't actually die -- don't alert on those.
