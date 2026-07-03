@@ -52,6 +52,7 @@ final class PortStore: ObservableObject {
             let uptimes = UptimeResolver.elapsedSeconds(for: uniquePids)
             let metrics = ProcessMetricsResolver.metrics(for: uniquePids)
             let commandLines = CommandLineResolver.commandLines(for: uniquePids)
+            let processTable = ProcessTreeResolver.snapshot()
 
             var enriched: [PortInfo] = []
             enriched.reserveCapacity(scanned.count)
@@ -73,6 +74,7 @@ final class PortStore: ObservableObject {
                         processName: info.processName, commandLine: commandLine
                     )
                 }
+                info.ancestry = ProcessTreeResolver.ancestry(of: info.pid, in: processTable)
                 enriched.append(info)
             }
 
@@ -140,6 +142,18 @@ final class PortStore: ObservableObject {
         for info in infos {
             Darwin.kill(info.pid, SIGTERM)
         }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.refresh()
+        }
+    }
+
+    /// Kills the process together with its wrapper ancestors (e.g. the `npm run dev`
+    /// that spawned the `node` server), outermost first so nothing respawns the leaf.
+    func killTree(_ info: PortInfo) {
+        for entry in info.ancestry.reversed() {
+            Darwin.kill(entry.pid, SIGTERM)
+        }
+        Darwin.kill(info.pid, SIGTERM)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.refresh()
         }

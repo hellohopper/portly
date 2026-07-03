@@ -16,6 +16,8 @@ struct PortInfo: Identifiable, Hashable {
     var workingDirectory: String?
     var bytesInPerSecond: Double?
     var bytesOutPerSecond: Double?
+    /// Ancestor processes (leaf-side first, boundary-limited), e.g. npm wrapping node.
+    var ancestry: [ProcessTreeResolver.Entry] = []
 
     var id: String { "\(pid)-\(port)-\(proto)" }
 

@@ -70,6 +70,7 @@ struct MenuContentView: View {
                                     label: store.portLabels[port.port],
                                     healthStatus: store.healthStatuses[port.port],
                                     onKill: { store.kill(port) },
+                                    onKillTree: { store.killTree(port) },
                                     onTogglePin: { store.togglePin(port.port) },
                                     onToggleSelect: { toggleSelection(port.port) },
                                     onRestart: { store.restart(port) },
@@ -206,6 +207,7 @@ private struct PortRow: View {
     let label: String?
     let healthStatus: Int?
     let onKill: () -> Void
+    let onKillTree: () -> Void
     let onTogglePin: () -> Void
     let onToggleSelect: () -> Void
     let onRestart: () -> Void
@@ -282,6 +284,9 @@ private struct PortRow: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .help(info.ancestry.isEmpty
+                          ? ""
+                          : "Process tree: \(ProcessTreeResolver.describe(leafName: info.processName, ancestry: info.ancestry))")
                 if let secondaryLine {
                     HStack(spacing: 4) {
                         Text(verbatim: secondaryLine)
@@ -338,6 +343,10 @@ private struct PortRow: View {
             Button("Copy localhost URL") { copyLocalhostURL() }
             if info.proto.contains("TCP") {
                 Button("Copy as curl") { copyToPasteboard(CurlCommandBuilder.command(port: info.port)) }
+            }
+            if !info.ancestry.isEmpty {
+                Button("Kill process tree (\(ProcessTreeResolver.describe(leafName: info.processName, ancestry: info.ancestry)))",
+                       role: .destructive, action: onKillTree)
             }
             Button("Ignore \(info.processName)", action: onIgnore)
         }
