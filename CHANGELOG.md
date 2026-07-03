@@ -3,6 +3,15 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.4.1] - 2026-07-03
+
+### Fixed
+- "Download & Install" now stages the new app bundle in a writable temp directory before swapping it in — replacing directly from the read-only DMG mount failed at the final step
+- Network throughput samples are no longer dropped for processes whose names contain commas
+- Bulk kill now kills every selected port, including selected rows hidden by an active search filter
+- Search matches custom per-port labels
+- Ignoring a pinned process no longer fires a false "pinned port stopped" notification
+
 ## [0.4.0] - 2026-07-02
 
 ### Added
@@ -50,6 +59,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.4.1]: https://github.com/hellohopper/portly/releases/tag/v0.4.1
 [0.4.0]: https://github.com/hellohopper/portly/releases/tag/v0.4.0
 [0.3.1]: https://github.com/hellohopper/portly/releases/tag/v0.3.1
 [0.3.0]: https://github.com/hellohopper/portly/releases/tag/v0.3.0
