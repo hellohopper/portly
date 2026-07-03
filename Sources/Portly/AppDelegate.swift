@@ -39,6 +39,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager = HotkeyManager { [weak self] in
             self?.togglePopover()
         }
+
+        // Docs tooling: renders the menu view to /tmp/portly-snapshot.png on request
+        // (used to regenerate the README/website screenshot without screen recording
+        // permissions). Trigger:
+        //   osascript -e 'use framework "Foundation"' \
+        //     -e 'current application'"'"'s NSDistributedNotificationCenter'"'"'s defaultCenter()'"'"'s postNotificationName:"dev.hellohopper.portly.render-snapshot" object:(missing value) userInfo:(missing value) deliverImmediately:true'
+        DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name("dev.hellohopper.portly.render-snapshot"),
+            object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.renderSnapshot()
+            }
+        }
+    }
+
+    /// Opens the popover and writes its CGWindow number to /tmp/portly-window-id so
+    /// external tooling can `screencapture -l<id>` a pixel-perfect screenshot, then
+    /// closes the popover again a few seconds later.
+    private func renderSnapshot() {
+        if popover?.isShown != true {
+            togglePopover()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+            guard let window = self?.popover?.contentViewController?.view.window else { return }
+            try? "\(window.windowNumber)".write(
+                toFile: "/tmp/portly-window-id", atomically: true, encoding: .utf8
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                self?.popover?.performClose(nil)
+            }
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
