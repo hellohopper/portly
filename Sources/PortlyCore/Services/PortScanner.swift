@@ -1,8 +1,8 @@
 import Foundation
 
-enum PortScanner {
+public enum PortScanner {
 
-    static func scan() -> [PortInfo] {
+    public static func scan() -> [PortInfo] {
         var results: [PortInfo] = []
         results.append(contentsOf: scan(protoFlag: "-iTCP", extraArgs: ["-sTCP:LISTEN"], proto: "TCP"))
         results.append(contentsOf: scan(protoFlag: "-iUDP", extraArgs: [], proto: "UDP"))

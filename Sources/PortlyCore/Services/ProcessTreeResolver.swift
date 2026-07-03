@@ -2,11 +2,11 @@ import Foundation
 
 /// Resolves the ancestry of a process (e.g. `npm run dev` → `node`) so wrapper-managed
 /// dev servers can be understood -- and killed -- at the root instead of just the leaf.
-enum ProcessTreeResolver {
+public enum ProcessTreeResolver {
 
-    struct Entry: Hashable {
-        let pid: Int32
-        let name: String
+    public struct Entry: Hashable {
+        public let pid: Int32
+        public let name: String
     }
 
     /// Ancestors that mark the edge of the "interesting" tree: climbing past a shell,
@@ -18,7 +18,7 @@ enum ProcessTreeResolver {
     ]
 
     /// Builds a pid -> (ppid, executable name) table from one `ps` call.
-    static func snapshot() -> [Int32: (ppid: Int32, name: String)] {
+    public static func snapshot() -> [Int32: (ppid: Int32, name: String)] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/ps")
         process.arguments = ["-axo", "pid=,ppid=,comm="]
@@ -54,7 +54,7 @@ enum ProcessTreeResolver {
 
     /// Walks upward from (but not including) `pid`, returning ancestors leaf-side
     /// first, stopping before boundary processes, pid 1, cycles, or 6 levels.
-    static func ancestry(of pid: Int32, in table: [Int32: (ppid: Int32, name: String)]) -> [Entry] {
+    public static func ancestry(of pid: Int32, in table: [Int32: (ppid: Int32, name: String)]) -> [Entry] {
         var chain: [Entry] = []
         var visited: Set<Int32> = [pid]
         var current = pid
@@ -71,7 +71,7 @@ enum ProcessTreeResolver {
     }
 
     /// Human-readable chain, outermost wrapper first: "npm → node".
-    static func describe(leafName: String, ancestry: [Entry]) -> String {
+    public static func describe(leafName: String, ancestry: [Entry]) -> String {
         (ancestry.reversed().map(\.name) + [leafName]).joined(separator: " → ")
     }
 }

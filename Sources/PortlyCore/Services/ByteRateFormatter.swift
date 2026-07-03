@@ -1,8 +1,8 @@
 import Foundation
 
-enum ByteRateFormatter {
+public enum ByteRateFormatter {
     /// Formats a bytes/sec value as a short human-readable rate, e.g. "482B/s", "12KB/s", "3.4MB/s".
-    static func format(bytesPerSecond: Double) -> String {
+    public static func format(bytesPerSecond: Double) -> String {
         let units = ["B", "KB", "MB", "GB"]
         var value = bytesPerSecond
         var unitIndex = 0

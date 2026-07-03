@@ -1,14 +1,14 @@
 import Foundation
 
-enum ProcessMetricsResolver {
+public enum ProcessMetricsResolver {
 
-    struct Metrics {
-        let cpuPercent: Double
-        let memPercent: Double
+    public struct Metrics {
+        public let cpuPercent: Double
+        public let memPercent: Double
     }
 
     /// Batch-resolves %CPU and %MEM for the given pids using a single `ps` call.
-    static func metrics(for pids: [Int32]) -> [Int32: Metrics] {
+    public static func metrics(for pids: [Int32]) -> [Int32: Metrics] {
         guard !pids.isEmpty else { return [:] }
 
         let pidList = pids.map(String.init).joined(separator: ",")
@@ -44,10 +44,10 @@ enum ProcessMetricsResolver {
 
     /// Energy Impact-style classification based on CPU usage, mirroring the color coding
     /// used by Activity Monitor's Energy tab (macOS doesn't expose the actual private score).
-    enum EnergyLevel {
+    public enum EnergyLevel {
         case low, medium, high
 
-        static func from(cpuPercent: Double) -> EnergyLevel {
+        public static func from(cpuPercent: Double) -> EnergyLevel {
             switch cpuPercent {
             case ..<5: return .low
             case 5..<20: return .medium

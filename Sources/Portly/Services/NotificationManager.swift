@@ -1,3 +1,4 @@
+import PortlyCore
 import UserNotifications
 
 enum NotificationManager {

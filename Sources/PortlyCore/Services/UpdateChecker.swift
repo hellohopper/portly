@@ -1,17 +1,17 @@
 import Foundation
 
-enum UpdateChecker {
-    struct UpdateInfo {
-        let version: String
-        let url: URL
+public enum UpdateChecker {
+    public struct UpdateInfo {
+        public let version: String
+        public let url: URL
         /// Direct download URL for the release's Portly.dmg asset, when published.
         /// Powers in-app "download and install"; falls back to opening `url` when nil.
-        let dmgURL: URL?
+        public let dmgURL: URL?
     }
 
     private static let releasesAPIURL = URL(string: "https://api.github.com/repos/hellohopper/portly/releases/latest")!
 
-    static func checkForUpdate(currentVersion: String) async -> UpdateInfo? {
+    public static func checkForUpdate(currentVersion: String) async -> UpdateInfo? {
         var request = URLRequest(url: releasesAPIURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
 
@@ -33,7 +33,7 @@ enum UpdateChecker {
 
     /// Numeric, component-wise comparison (so "0.10.0" correctly beats "0.9.0",
     /// unlike a plain string comparison).
-    static func isVersion(_ lhs: String, newerThan rhs: String) -> Bool {
+    public static func isVersion(_ lhs: String, newerThan rhs: String) -> Bool {
         let lhsParts = lhs.split(separator: ".").compactMap { Int($0) }
         let rhsParts = rhs.split(separator: ".").compactMap { Int($0) }
         let count = max(lhsParts.count, rhsParts.count)

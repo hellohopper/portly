@@ -1,3 +1,4 @@
+import PortlyCore
 import SwiftUI
 
 struct HistoryView: View {
