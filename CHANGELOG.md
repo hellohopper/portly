@@ -3,6 +3,11 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.1] - 2026-07-04
+
+### Fixed
+- `portly version` printed "dev" instead of the real version when run via the Homebrew-installed `portly` symlink (the normal way anyone would invoke it) — `Bundle.main` was resolving off the symlink path rather than the actual binary location
+
 ## [0.5.0] - 2026-07-03
 
 ### Added
@@ -76,6 +81,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.5.1]: https://github.com/hellohopper/portly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/hellohopper/portly/releases/tag/v0.5.0
 [0.4.1]: https://github.com/hellohopper/portly/releases/tag/v0.4.1
 [0.4.0]: https://github.com/hellohopper/portly/releases/tag/v0.4.0
