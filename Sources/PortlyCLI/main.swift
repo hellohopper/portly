@@ -1,5 +1,31 @@
 import Foundation
 import PortlyCore
+#if canImport(Darwin)
+import Darwin
+#endif
+
+/// Bundle.main resolves the app bundle from argv[0] as invoked, not the real
+/// executable location -- so running via the Homebrew-installed `portly` symlink
+/// (/opt/homebrew/bin/portly -> Portly.app/Contents/MacOS/portly-cli) fails to find
+/// Info.plist and silently falls back to nil. _NSGetExecutablePath + realpath gives
+/// the actual on-disk location regardless of how the symlink was invoked.
+func appBundleVersion() -> String? {
+    var size: UInt32 = 0
+    _NSGetExecutablePath(nil, &size)
+    var pathBuffer = [Int8](repeating: 0, count: Int(size))
+    guard _NSGetExecutablePath(&pathBuffer, &size) == 0 else { return nil }
+
+    var realBuffer = [Int8](repeating: 0, count: Int(PATH_MAX))
+    guard realpath(pathBuffer, &realBuffer) != nil else { return nil }
+    let executableURL = URL(fileURLWithPath: String(cString: realBuffer))
+
+    // executableURL: .../Portly.app/Contents/MacOS/portly-cli
+    let bundleURL = executableURL
+        .deletingLastPathComponent() // MacOS
+        .deletingLastPathComponent() // Contents
+        .deletingLastPathComponent() // Portly.app
+    return Bundle(url: bundleURL)?.infoDictionary?["CFBundleShortVersionString"] as? String
+}
 
 func enrichedPorts() -> [PortInfo] {
     let scanned = PortScanner.scan().sorted { $0.port < $1.port }
@@ -86,10 +112,8 @@ func run() -> Int32 {
         return 0
 
     case .version:
-        // Inside Portly.app, Bundle.main resolves to the app bundle and reports its
-        // version; a bare `swift build` binary has no bundle version.
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
-        print(version ?? "dev")
+        // A bare `swift build` binary (not inside Portly.app) has no bundle version.
+        print(appBundleVersion() ?? "dev")
         return 0
 
     case .help:
