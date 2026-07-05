@@ -3,6 +3,12 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.5.2] - 2026-07-04
+
+### Fixed
+- Overlapping port scans (2s timer + kill/restart/ignore actions each triggering their own) could apply out of completion order, letting an older, slower scan silently overwrite fresher results and flash the list backward
+- A port's row identity changed when its TCP and UDP listeners merged into "TCP+UDP", causing SwiftUI to treat the merge as a new row instead of updating in place (breaking row animation and in-progress keyboard focus)
+
 ## [0.5.1] - 2026-07-04
 
 ### Fixed
@@ -81,6 +87,7 @@ Initial release.
 - DMG installer, SHA-256 checksum publishing, and a Homebrew tap (`hellohopper/portly`)
 - MIT license, showcase website ([hellohopper.github.io/portly](https://hellohopper.github.io/portly/))
 
+[0.5.2]: https://github.com/hellohopper/portly/releases/tag/v0.5.2
 [0.5.1]: https://github.com/hellohopper/portly/releases/tag/v0.5.1
 [0.5.0]: https://github.com/hellohopper/portly/releases/tag/v0.5.0
 [0.4.1]: https://github.com/hellohopper/portly/releases/tag/v0.4.1
