@@ -19,7 +19,11 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
     /// Ancestor processes (leaf-side first, boundary-limited), e.g. npm wrapping node.
     public var ancestry: [ProcessTreeResolver.Entry] = []
 
-    public var id: String { "\(pid)-\(port)-\(proto)" }
+    // Deliberately excludes `proto`: a TCP-only row that gains a UDP listener (or
+    // vice versa) merges into "TCP+UDP" on the next scan, and should update in
+    // place rather than being treated as a new row (which would break SwiftUI's
+    // row animation and any in-progress keyboard focus/scroll on that row).
+    public var id: String { "\(pid)-\(port)" }
 
     public var isDockerManaged: Bool {
         DockerDetector.isDockerManaged(processName: processName)
