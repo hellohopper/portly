@@ -44,4 +44,22 @@ struct PortInfoTests {
         let info = makeInfo(processName: "node", projectName: "portly-web")
         #expect(!info.matches(query: "django"))
     }
+
+    @Test func idIsStableAcrossProtocolMerge() {
+        // A row must keep its identity when TCP and UDP entries for the same
+        // pid+port merge into "TCP+UDP" -- otherwise SwiftUI treats the merge as a
+        // brand-new row, breaking animation and any in-progress keyboard focus.
+        var info = makeInfo()
+        let idBefore = info.id
+        info.proto = "TCP+UDP"
+        #expect(info.id == idBefore)
+    }
+
+    @Test func idDiffersAcrossPidOrPort() {
+        let a = PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil)
+        let b = PortInfo(pid: 200, port: 3000, proto: "TCP", processName: "node", commandPath: nil)
+        let c = PortInfo(pid: 100, port: 4000, proto: "TCP", processName: "node", commandPath: nil)
+        #expect(a.id != b.id)
+        #expect(a.id != c.id)
+    }
 }

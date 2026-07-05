@@ -15,6 +15,10 @@ final class PortStore: ObservableObject {
     private let pollInterval: TimeInterval = 2.0
     private static let pinnedPortsDefaultsKey = "pinnedPorts"
     private var hasCompletedInitialScan = false
+    /// Guards against overlapping scans (the 2s timer and user actions like kill/ignore
+    /// each trigger their own refresh) applying results out of completion order -- only
+    /// the most-recently-started scan's results are allowed to land.
+    private var refreshGeneration = 0
 
     /// Git/project context rarely changes for the lifetime of a process, so cache it per pid
     /// instead of re-resolving (which shells out to lsof + reads files) on every poll.
@@ -54,6 +58,9 @@ final class PortStore: ObservableObject {
     }
 
     func refresh() {
+        refreshGeneration += 1
+        let generation = refreshGeneration
+
         Task.detached { [weak self] in
             let scanned = PortScanner.scan().sorted { $0.port < $1.port }
             guard let self else { return }
@@ -97,6 +104,10 @@ final class PortStore: ObservableObject {
 
             let allEnriched = enriched
             await MainActor.run {
+                // A newer refresh already started (and may have already landed its
+                // results) -- applying this older, slower one now would go backwards.
+                guard generation == self.refreshGeneration else { return }
+
                 let finalEnriched = allEnriched.filter {
                     !self.ignoredProcessNames.contains($0.processName.lowercased())
                 }
