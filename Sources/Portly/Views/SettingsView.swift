@@ -35,9 +35,15 @@ struct SettingsView: View {
             Divider()
 
             Toggle("Enable .localhost proxy", isOn: $store.isLocalhostProxyEnabled)
-            Text("Give any port a name.localhost:\(LocalhostProxyServer.port) address from the globe icon on its row.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if let proxyStartupError = store.proxyStartupError {
+                Text(proxyStartupError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            } else {
+                Text("Give any port a name.localhost:\(LocalhostProxyServer.port) address from the globe icon on its row.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
 
             Divider()
 

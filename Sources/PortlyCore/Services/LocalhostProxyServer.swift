@@ -14,9 +14,20 @@ public final class LocalhostProxyServer: @unchecked Sendable {
     /// per project. Going lower (e.g. 80) would need root and is out of scope.
     public static let port: UInt16 = 7777
 
+    /// Reported back on the main queue after `start()` so the UI can surface a
+    /// message instead of the proxy silently never accepting connections.
+    public enum State: Sendable, Equatable {
+        case stopped
+        case listening
+        case failed(String)
+    }
+
     private let routesLock = NSLock()
     private var routes: [String: Int] = [:]
     private var listener: NWListener?
+
+    /// Set by the caller before `start()`; invoked on the main queue.
+    public var onStateChange: (@Sendable (State) -> Void)?
 
     private init() {}
 
@@ -32,9 +43,30 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         )
         parameters.allowLocalEndpointReuse = true
 
-        guard let listener = try? NWListener(using: parameters) else { return }
+        guard let listener = try? NWListener(using: parameters) else {
+            report(.failed("Couldn't create the localhost proxy listener."))
+            return
+        }
         listener.newConnectionHandler = { [weak self] connection in
             self?.accept(connection)
+        }
+        listener.stateUpdateHandler = { [weak self, weak listener] state in
+            switch state {
+            case .ready:
+                self?.report(.listening)
+            case .waiting(let error), .failed(let error):
+                // .waiting means Network.framework intends to keep retrying (e.g. the
+                // port is already in use) -- for a fixed, single-purpose port that
+                // will never resolve on its own, so treat it the same as a hard
+                // failure and stop retrying rather than spinning silently forever.
+                self?.report(.failed(Self.describe(error)))
+                listener?.cancel()
+            case .cancelled:
+                self?.listener = nil
+                self?.report(.stopped)
+            default:
+                break
+            }
         }
         listener.start(queue: .global(qos: .utility))
         self.listener = listener
@@ -43,6 +75,18 @@ public final class LocalhostProxyServer: @unchecked Sendable {
     public func stop() {
         listener?.cancel()
         listener = nil
+    }
+
+    private func report(_ state: State) {
+        let handler = onStateChange
+        DispatchQueue.main.async { handler?(state) }
+    }
+
+    private static func describe(_ error: NWError) -> String {
+        if case .posix(let code) = error, code == .EADDRINUSE {
+            return "Port \(Self.port) is already in use by another app."
+        }
+        return "Localhost proxy failed to start: \(error.debugDescription)"
     }
 
     /// Replaces the full name -> port routing table. Called whenever the user edits a

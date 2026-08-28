@@ -3,6 +3,11 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Added
+- `.localhost` proxy — name a port from the globe icon on its row and open it as `name.localhost:7777` instead of hunting down the real port number. Off by default; toggle in Settings. Loopback-only, single fixed port, no elevated privileges required
+
 ## [0.5.2] - 2026-07-04
 
 ### Fixed

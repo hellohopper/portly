@@ -32,13 +32,16 @@ final class PortStore: ObservableObject {
             guard isLocalhostProxyEnabled != oldValue else { return }
             UserDefaults.standard.set(isLocalhostProxyEnabled, forKey: Self.proxyEnabledDefaultsKey)
             if isLocalhostProxyEnabled {
-                LocalhostProxyServer.shared.start()
-                syncProxyRoutes()
+                startLocalhostProxy()
             } else {
+                proxyStartupError = nil
                 LocalhostProxyServer.shared.stop()
             }
         }
     }
+    /// Set when the proxy listener fails to bind (e.g. port 7777 already in use by
+    /// something else) so Settings can tell the user instead of it silently doing nothing.
+    @Published private(set) var proxyStartupError: String?
     @Published var hasAlert: Bool = false
     @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
     /// port -> latest HTTP status code from the health probe (absent = not an HTTP server).
@@ -59,8 +62,7 @@ final class PortStore: ObservableObject {
     func start() {
         NetworkThroughputResolver.shared.start()
         if isLocalhostProxyEnabled {
-            LocalhostProxyServer.shared.start()
-            syncProxyRoutes()
+            startLocalhostProxy()
         }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
@@ -293,6 +295,24 @@ final class PortStore: ObservableObject {
 
     private static func loadProxyEnabled() -> Bool {
         UserDefaults.standard.object(forKey: proxyEnabledDefaultsKey) as? Bool ?? false
+    }
+
+    private func startLocalhostProxy() {
+        LocalhostProxyServer.shared.onStateChange = { [weak self] state in
+            Task { @MainActor in
+                guard let self else { return }
+                switch state {
+                case .failed(let message):
+                    self.proxyStartupError = message
+                case .listening:
+                    self.proxyStartupError = nil
+                case .stopped:
+                    break
+                }
+            }
+        }
+        LocalhostProxyServer.shared.start()
+        syncProxyRoutes()
     }
 
     /// Pushes the current name -> port table to the proxy, dropping any name whose
