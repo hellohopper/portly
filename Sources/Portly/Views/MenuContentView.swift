@@ -99,7 +99,10 @@ struct MenuContentView: View {
                                         onToggleSelect: { toggleSelection(port.port) },
                                         onRestart: { store.restart(port) },
                                         onIgnore: { store.ignoreProcessName(port.processName) },
-                                        onSetLabel: { store.setLabel($0, for: port.port) }
+                                        onSetLabel: { store.setLabel($0, for: port.port) },
+                                        proxyName: store.proxyNames[port.port],
+                                        isProxyEnabled: store.isLocalhostProxyEnabled,
+                                        onSetProxyName: { store.setProxyName($0, for: port.port) }
                                     )
                                     Divider()
                                 }
@@ -307,9 +310,15 @@ private struct PortRow: View {
     let onRestart: () -> Void
     let onIgnore: () -> Void
     let onSetLabel: (String) -> Void
+    let proxyName: String?
+    let isProxyEnabled: Bool
+    let onSetProxyName: (String) -> Bool
 
     @State private var isEditingLabel = false
     @State private var labelText = ""
+    @State private var isEditingProxyName = false
+    @State private var proxyNameText = ""
+    @State private var proxyNameError = false
 
     var body: some View {
         HStack {
@@ -368,11 +377,47 @@ private struct PortRow: View {
                         }
                         .padding(10)
                     }
+                    if isProxyEnabled && info.proto.contains("TCP") {
+                        Button(action: beginEditingProxyName) {
+                            Image(systemName: "globe")
+                                .font(.caption2)
+                        }
+                        .buttonStyle(.borderless)
+                        .help("Give this port a name.localhost address")
+                        .popover(isPresented: $isEditingProxyName) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                HStack {
+                                    TextField("name", text: $proxyNameText, onCommit: commitProxyName)
+                                        .textFieldStyle(.roundedBorder)
+                                        .frame(width: 120)
+                                    Text(".localhost:\(LocalhostProxyServer.port)")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Button("Save", action: commitProxyName)
+                                }
+                                if proxyNameError {
+                                    Text("Lowercase letters, digits, hyphens only.")
+                                        .font(.caption2)
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                            .padding(10)
+                        }
+                    }
                 }
                 if let label {
                     Text(label)
                         .font(.caption.bold())
                         .foregroundStyle(Color.accentColor)
+                }
+                if let proxyName {
+                    Button(action: openProxyURL) {
+                        Text("\(proxyName).localhost:\(LocalhostProxyServer.port)")
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Open in browser")
                 }
                 Text(verbatim: primaryLine)
                     .font(.caption)
@@ -436,6 +481,9 @@ private struct PortRow: View {
         }
         .contextMenu {
             Button("Copy localhost URL") { copyLocalhostURL() }
+            if let proxyName {
+                Button("Copy .localhost URL") { copyToPasteboard(proxyURLString(name: proxyName)) }
+            }
             if info.proto.contains("TCP") {
                 Button("Copy as curl") { copyToPasteboard(CurlCommandBuilder.command(port: info.port)) }
             }
@@ -455,6 +503,29 @@ private struct PortRow: View {
     private func commitLabel() {
         onSetLabel(labelText)
         isEditingLabel = false
+    }
+
+    private func beginEditingProxyName() {
+        proxyNameText = proxyName ?? ""
+        proxyNameError = false
+        isEditingProxyName = true
+    }
+
+    private func commitProxyName() {
+        if onSetProxyName(proxyNameText) {
+            isEditingProxyName = false
+        } else {
+            proxyNameError = true
+        }
+    }
+
+    private func proxyURLString(name: String) -> String {
+        "http://\(name).localhost:\(LocalhostProxyServer.port)"
+    }
+
+    private func openProxyURL() {
+        guard let proxyName, let url = URL(string: proxyURLString(name: proxyName)) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     private func openInBrowser() {
