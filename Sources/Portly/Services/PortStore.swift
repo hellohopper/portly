@@ -26,6 +26,22 @@ final class PortStore: ObservableObject {
 
     @Published var ignoredProcessNames: Set<String> = PortStore.loadIgnoredProcessNames()
     @Published var portLabels: [Int: String] = PortStore.loadPortLabels()
+    @Published var proxyNames: [Int: String] = PortStore.loadProxyNames()
+    @Published var isLocalhostProxyEnabled: Bool = PortStore.loadProxyEnabled() {
+        didSet {
+            guard isLocalhostProxyEnabled != oldValue else { return }
+            UserDefaults.standard.set(isLocalhostProxyEnabled, forKey: Self.proxyEnabledDefaultsKey)
+            if isLocalhostProxyEnabled {
+                startLocalhostProxy()
+            } else {
+                proxyStartupError = nil
+                LocalhostProxyServer.shared.stop()
+            }
+        }
+    }
+    /// Set when the proxy listener fails to bind (e.g. port 7777 already in use by
+    /// something else) so Settings can tell the user instead of it silently doing nothing.
+    @Published private(set) var proxyStartupError: String?
     @Published var hasAlert: Bool = false
     @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
     /// port -> latest HTTP status code from the health probe (absent = not an HTTP server).
@@ -40,9 +56,14 @@ final class PortStore: ObservableObject {
 
     private static let ignoredProcessNamesDefaultsKey = "ignoredProcessNames"
     private static let portLabelsDefaultsKey = "portLabels"
+    private static let proxyNamesDefaultsKey = "localhostProxyNames"
+    private static let proxyEnabledDefaultsKey = "localhostProxyEnabled"
 
     func start() {
         NetworkThroughputResolver.shared.start()
+        if isLocalhostProxyEnabled {
+            startLocalhostProxy()
+        }
         refresh()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -55,6 +76,7 @@ final class PortStore: ObservableObject {
         timer?.invalidate()
         timer = nil
         NetworkThroughputResolver.shared.stop()
+        LocalhostProxyServer.shared.stop()
     }
 
     func refresh() {
@@ -134,6 +156,7 @@ final class PortStore: ObservableObject {
                 self.projectContextCache = self.projectContextCache.filter { livePids.contains($0.key) }
 
                 self.refreshHealthStatuses(for: finalEnriched)
+                self.syncProxyRoutes()
             }
         }
     }
@@ -241,6 +264,69 @@ final class PortStore: ObservableObject {
         return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
             Int(key).map { ($0, value) }
         })
+    }
+
+    /// Sets (or, if `name` is empty, clears) the `.localhost` proxy name for a port.
+    /// Rejects anything that isn't a valid DNS label rather than silently mangling it,
+    /// so the caller can tell the user why their input didn't take.
+    @discardableResult
+    func setProxyName(_ name: String, for port: Int) -> Bool {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if trimmed.isEmpty {
+            proxyNames.removeValue(forKey: port)
+        } else {
+            guard LocalhostProxyServer.isValidName(trimmed) else { return false }
+            proxyNames[port] = trimmed
+        }
+        UserDefaults.standard.set(
+            Dictionary(uniqueKeysWithValues: proxyNames.map { (String($0.key), $0.value) }),
+            forKey: Self.proxyNamesDefaultsKey
+        )
+        syncProxyRoutes()
+        return true
+    }
+
+    private static func loadProxyNames() -> [Int: String] {
+        let raw = UserDefaults.standard.dictionary(forKey: proxyNamesDefaultsKey) as? [String: String] ?? [:]
+        return Dictionary(uniqueKeysWithValues: raw.compactMap { key, value in
+            Int(key).map { ($0, value) }
+        })
+    }
+
+    private static func loadProxyEnabled() -> Bool {
+        UserDefaults.standard.object(forKey: proxyEnabledDefaultsKey) as? Bool ?? false
+    }
+
+    private func startLocalhostProxy() {
+        LocalhostProxyServer.shared.onStateChange = { [weak self] state in
+            Task { @MainActor in
+                guard let self else { return }
+                switch state {
+                case .failed(let message):
+                    self.proxyStartupError = message
+                case .listening:
+                    self.proxyStartupError = nil
+                case .stopped:
+                    break
+                }
+            }
+        }
+        LocalhostProxyServer.shared.start()
+        syncProxyRoutes()
+    }
+
+    /// Pushes the current name -> port table to the proxy, dropping any name whose
+    /// port isn't actually listening over TCP right now (a dead mapping would just
+    /// dead-end the connection, but skipping it lets a *new* process on that name
+    /// take over cleanly instead of racing a stale entry).
+    private func syncProxyRoutes() {
+        guard isLocalhostProxyEnabled else { return }
+        let liveTCPPorts = Set(ports.filter { $0.proto.contains("TCP") }.map(\.port))
+        var routes: [String: Int] = [:]
+        for (port, name) in proxyNames where liveTCPPorts.contains(port) {
+            routes[name] = port
+        }
+        LocalhostProxyServer.shared.updateRoutes(routes)
     }
 
     func togglePin(_ port: Int) {

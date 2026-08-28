@@ -41,6 +41,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Port history | Rolling log of open/close events with timestamps, persisted across launches |
 | Keyboard navigation | ↑/↓ to move, Enter to open in browser, ⌘⌫ to kill, Esc to clear search |
 | CLI companion | `portly list` / `portly kill 3000` from your terminal — see [CLI](#cli) |
+| `.localhost` proxy | Give any port a `name.localhost:7777` address (globe icon on its row) so you don't have to remember the port number |
 
 ## Download
 
