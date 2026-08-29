@@ -51,6 +51,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | `portly watch` | CLI mode that re-renders the port table every 2s, for keeping an eye on things from a terminal |
 | Throughput sparkline | A tiny trend line next to the CPU/MEM line shows recent network activity, not just the instantaneous rate |
 | Idle port alerts | Optional notification when a port has seen no network traffic for 30 minutes — the dev server you forgot was running; can optionally auto-kill instead (off by default) |
+| LAN exposure badge | An orange `LAN` badge marks ports bound to all interfaces (`--host`, `-b 0.0.0.0`, most Docker publishes) — the ones anybody on your Wi-Fi can reach |
 
 ## Download
 
@@ -81,6 +82,8 @@ A companion command-line tool ships inside the app bundle:
 portly              # table of listening ports with framework/project/uptime
 portly list --json  # machine-readable output
 portly watch        # re-renders the table every 2s until you Ctrl+C
+portly wait 3000    # block until something is listening (--timeout <s>, exits 1 on timeout)
+portly free         # print an unused port from the common dev ranges
 portly kill 3000    # SIGTERM whatever is listening on port 3000
 ```
 

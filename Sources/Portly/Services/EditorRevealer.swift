@@ -14,9 +14,10 @@ enum EditorRevealer {
         "com.sublimetext.3",
     ]
 
-    static func isAvailable() -> Bool {
-        resolvedApplication() != nil
-    }
+    /// Resolved once. This is consulted from every row's `body`, and each miss costs
+    /// up to six LaunchServices lookups -- re-running that per row per render made
+    /// scrolling the list do real work for an answer that never changes.
+    static let isInstalled: Bool = resolvedApplication() != nil
 
     static func open(workingDirectory: String) {
         guard let appURL = resolvedApplication() else { return }

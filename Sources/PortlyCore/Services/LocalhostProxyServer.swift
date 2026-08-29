@@ -24,7 +24,11 @@ public final class LocalhostProxyServer: @unchecked Sendable {
 
     private let routesLock = NSLock()
     private var routes: [String: Int] = [:]
+    /// Guards `listener`/`generation`, which are touched from both the main thread
+    /// (start/stop) and the listener's own queue (state updates).
+    private let stateLock = NSLock()
     private var listener: NWListener?
+    private var generation = 0
 
     /// Set by the caller before `start()`; invoked on the main queue.
     public var onStateChange: (@Sendable (State) -> Void)?
@@ -33,7 +37,11 @@ public final class LocalhostProxyServer: @unchecked Sendable {
 
     /// Starts the listener if it isn't already running. Safe to call repeatedly.
     public func start() {
-        guard listener == nil else { return }
+        stateLock.lock()
+        guard listener == nil else { stateLock.unlock(); return }
+        generation &+= 1
+        let generation = self.generation
+        stateLock.unlock()
 
         let parameters = NWParameters.tcp
         // Bind loopback-only: this must never be reachable from the network, only
@@ -51,30 +59,60 @@ public final class LocalhostProxyServer: @unchecked Sendable {
             self?.accept(connection)
         }
         listener.stateUpdateHandler = { [weak self, weak listener] state in
+            guard let self else { return }
+            // A stale listener (already replaced by a stop()/start() cycle) must not
+            // clear the *current* listener's reference -- doing so deallocates the
+            // live one, silently killing the proxy while the UI still reads healthy.
+            guard self.isCurrent(generation) else { return }
+
             switch state {
             case .ready:
-                self?.report(.listening)
+                self.report(.listening)
             case .waiting(let error), .failed(let error):
                 // .waiting means Network.framework intends to keep retrying (e.g. the
                 // port is already in use) -- for a fixed, single-purpose port that
                 // will never resolve on its own, so treat it the same as a hard
                 // failure and stop retrying rather than spinning silently forever.
-                self?.report(.failed(Self.describe(error)))
+                self.report(.failed(Self.describe(error)))
                 listener?.cancel()
             case .cancelled:
-                self?.listener = nil
-                self?.report(.stopped)
+                self.clearListener(generation)
+                self.report(.stopped)
             default:
                 break
             }
         }
         listener.start(queue: .global(qos: .utility))
-        self.listener = listener
+
+        stateLock.lock()
+        // A stop() may have landed between the guard above and here.
+        if self.generation == generation {
+            self.listener = listener
+        } else {
+            listener.cancel()
+        }
+        stateLock.unlock()
     }
 
     public func stop() {
-        listener?.cancel()
+        stateLock.lock()
+        let current = listener
         listener = nil
+        generation &+= 1
+        stateLock.unlock()
+        current?.cancel()
+    }
+
+    private func isCurrent(_ generation: Int) -> Bool {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return self.generation == generation
+    }
+
+    private func clearListener(_ generation: Int) {
+        stateLock.lock()
+        if self.generation == generation { listener = nil }
+        stateLock.unlock()
     }
 
     private func report(_ state: State) {
@@ -149,21 +187,61 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         // Replay everything read so far (headers, and any body bytes swept up in the
         // same read) before continuing to pipe the rest of the connection through.
         upstream.send(content: headerBytes, completion: .contentProcessed { _ in })
-        pipe(from: connection, to: upstream)
-        pipe(from: upstream, to: connection)
+
+        // Both directions must finish before the pair is torn down; whichever ends
+        // first only half-closes.
+        let pair = ConnectionPair(client: connection, upstream: upstream)
+        pipe(from: connection, to: upstream, pair: pair)
+        pipe(from: upstream, to: connection, pair: pair)
     }
 
-    private func pipe(from source: NWConnection, to destination: NWConnection) {
+    /// Tracks how many of a proxied connection's two directions have finished, so the
+    /// sockets are released once -- and only once -- both are done.
+    private final class ConnectionPair: @unchecked Sendable {
+        private let lock = NSLock()
+        private var finished = 0
+        let client: NWConnection
+        let upstream: NWConnection
+
+        init(client: NWConnection, upstream: NWConnection) {
+            self.client = client
+            self.upstream = upstream
+        }
+
+        /// Returns true when this was the second (final) direction to finish.
+        func directionFinished() -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            finished += 1
+            return finished >= 2
+        }
+
+        func cancelBoth() {
+            client.cancel()
+            upstream.cancel()
+        }
+    }
+
+    private func pipe(from source: NWConnection, to destination: NWConnection, pair: ConnectionPair) {
         source.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, error in
             if let data, !data.isEmpty {
                 destination.send(content: data, completion: .contentProcessed { _ in })
             }
-            if isComplete || error != nil {
-                destination.cancel()
-                source.cancel()
+            if error != nil {
+                pair.cancelBoth()
                 return
             }
-            self?.pipe(from: source, to: destination)
+            if isComplete {
+                // A half-close on this direction only means this side finished sending
+                // (the standard "write request, shutdown(SHUT_WR), read response"
+                // pattern). Forward the FIN and let the other direction keep running --
+                // cancelling both here would discard the response the client is waiting
+                // for.
+                destination.send(content: nil, isComplete: true, completion: .contentProcessed { _ in })
+                if pair.directionFinished() { pair.cancelBoth() }
+                return
+            }
+            self?.pipe(from: source, to: destination, pair: pair)
         }
     }
 

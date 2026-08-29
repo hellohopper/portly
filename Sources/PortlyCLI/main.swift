@@ -61,10 +61,11 @@ func printTable(_ ports: [PortInfo]) {
         return
     }
 
-    var rows: [[String]] = [["PORT", "PROTO", "PID", "PROCESS", "FRAMEWORK", "PROJECT", "UPTIME"]]
+    var rows: [[String]] = [["PORT", "BIND", "PROTO", "PID", "PROCESS", "FRAMEWORK", "PROJECT", "UPTIME"]]
     for info in ports {
         rows.append([
             String(info.port),
+            info.isExposedToNetwork ? "LAN" : "local",
             info.proto,
             String(info.pid),
             info.processName,
@@ -112,6 +113,27 @@ func run() -> Int32 {
             fflush(stdout)
             Thread.sleep(forTimeInterval: 2)
         }
+
+    case .wait(let port, let timeout):
+        let deadline = Date().addingTimeInterval(TimeInterval(timeout))
+        while Date() < deadline {
+            if PortScanner.scan().contains(where: { $0.port == port }) {
+                print("Port \(port) is listening.")
+                return 0
+            }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        FileHandle.standardError.write(Data("Timed out after \(timeout)s waiting for port \(port).\n".utf8))
+        return 1
+
+    case .free:
+        let used = Set(PortScanner.scan().map(\.port))
+        guard let port = FreePortFinder.suggest(excluding: used) else {
+            FileHandle.standardError.write(Data("No free port found in the common dev ranges.\n".utf8))
+            return 1
+        }
+        print(port)
+        return 0
 
     case .kill(let port):
         let matches = PortScanner.scan().filter { $0.port == port }

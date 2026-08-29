@@ -24,6 +24,25 @@ struct CLICommandTests {
         #expect(CLICommand.parse(["watch", "--json"]) == nil)
     }
 
+    @Test func parsesWaitWithAndWithoutTimeout() {
+        #expect(CLICommand.parse(["wait", "3000"]) == .wait(port: 3000, timeout: CLICommand.defaultWaitTimeout))
+        #expect(CLICommand.parse(["wait", "3000", "--timeout", "5"]) == .wait(port: 3000, timeout: 5))
+    }
+
+    @Test func rejectsMalformedWait() {
+        #expect(CLICommand.parse(["wait"]) == nil)
+        #expect(CLICommand.parse(["wait", "abc"]) == nil)
+        #expect(CLICommand.parse(["wait", "70000"]) == nil)
+        #expect(CLICommand.parse(["wait", "3000", "--timeout"]) == nil)
+        #expect(CLICommand.parse(["wait", "3000", "--timeout", "0"]) == nil)
+        #expect(CLICommand.parse(["wait", "3000", "--wat", "5"]) == nil)
+    }
+
+    @Test func parsesFree() {
+        #expect(CLICommand.parse(["free"]) == .free)
+        #expect(CLICommand.parse(["free", "extra"]) == nil)
+    }
+
     @Test func parsesKillWithValidPort() {
         #expect(CLICommand.parse(["kill", "3000"]) == .kill(port: 3000))
     }
