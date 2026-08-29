@@ -33,7 +33,16 @@ struct KeyboardNavigatorTests {
     }
 
     @Test func emptyListYieldsNoFocus() {
-        #expect(KeyboardNavigator.move(from: 3000, in: [], direction: .down) == nil)
-        #expect(KeyboardNavigator.move(from: nil, in: [], direction: .up) == nil)
+        #expect(KeyboardNavigator.move(from: 3000, in: [Int](), direction: .down) == nil)
+        #expect(KeyboardNavigator.move(from: Int?.none, in: [Int](), direction: .up) == nil)
+    }
+
+    /// Navigation is driven by row identity, not port number, because two processes
+    /// can listen on the same port on different local addresses.
+    @Test func navigatesRowIdentifiers() {
+        let rows = ["100-3000", "200-3000", "300-8000"]
+        #expect(KeyboardNavigator.move(from: nil, in: rows, direction: .down) == "100-3000")
+        #expect(KeyboardNavigator.move(from: "100-3000", in: rows, direction: .down) == "200-3000")
+        #expect(KeyboardNavigator.move(from: "300-8000", in: rows, direction: .down) == "300-8000")
     }
 }

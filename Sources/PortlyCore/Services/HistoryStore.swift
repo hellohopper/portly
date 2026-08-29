@@ -8,6 +8,9 @@ public final class HistoryStore: ObservableObject {
         public enum Kind: String, Codable, Sendable {
             case opened
             case closed
+            /// The port stayed up but changed owner -- a restart that completed
+            /// between two polls.
+            case replaced
         }
 
         public var id = UUID()
@@ -33,8 +36,13 @@ public final class HistoryStore: ObservableObject {
         events = Self.load(from: self.fileURL)
     }
 
-    public func record(opened: [PortInfo], closed: [PortInfo], at date: Date = Date()) {
-        guard !opened.isEmpty || !closed.isEmpty else { return }
+    public func record(
+        opened: [PortInfo],
+        closed: [PortInfo],
+        replaced: [PortInfo] = [],
+        at date: Date = Date()
+    ) {
+        guard !opened.isEmpty || !closed.isEmpty || !replaced.isEmpty else { return }
 
         var newEvents: [Event] = []
         for info in opened {
@@ -43,6 +51,10 @@ public final class HistoryStore: ObservableObject {
         }
         for info in closed {
             newEvents.append(Event(date: date, kind: .closed, port: info.port,
+                                   processName: info.processName, projectName: info.projectName))
+        }
+        for info in replaced {
+            newEvents.append(Event(date: date, kind: .replaced, port: info.port,
                                    processName: info.processName, projectName: info.projectName))
         }
 

@@ -22,6 +22,8 @@ All notable changes to Portly are documented here. Format loosely follows
 - Two ports can no longer be given the same `.localhost` name (which left the target up to dictionary ordering)
 - "Kill process tree" matches editor/browser helper processes by family, so a chain reaching e.g. `Code Helper (Renderer)` or a non-Terminal emulator no longer SIGTERMs the editor
 - Docker containers publishing a port *range* (`-p 8000-8002:...`) now resolve a container name on every row in the range
+- Selection, keyboard focus, and ⌘⌫ were keyed by port number, so when two processes listened on the same port (on different local addresses) acting on one row could kill the *other* process. These now use row identity (pid+port)
+- A port changing hands between two polls (a crash-and-respawn, or a restart completing inside one interval) left no trace at all in port history; it's now recorded as a "replaced" event — still without falsely alerting that a pinned port died
 
 ### Changed
 - Polling backs off from 2s to 15s while the menu bar panel is closed, and the per-refresh subprocess count dropped from 6 to 4 (one `ps` snapshot now covers uptime, CPU, memory and the process tree; resolving a process's project no longer runs `lsof` twice)

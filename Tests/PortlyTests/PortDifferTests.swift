@@ -57,6 +57,37 @@ struct PortDifferTests {
         #expect(diff.deadPinnedPorts.isEmpty)
     }
 
+    /// ...but the handover must still be *visible*, or a crash-and-respawn leaves no
+    /// trace in port history at all.
+    @Test func reportsAPortThatChangedOwner() {
+        let old = [PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil)]
+        let new = [PortInfo(pid: 999, port: 3000, proto: "TCP", processName: "node", commandPath: nil)]
+
+        let diff = PortDiffer.diff(old: old, new: new, pinned: [3000])
+
+        #expect(diff.replacedPorts.map(\.pid) == [999])
+    }
+
+    @Test func doesNotReportReplacementWhenThePidIsUnchanged() {
+        let ports = [makeInfo(port: 3000)]
+        #expect(PortDiffer.diff(old: ports, new: ports, pinned: []).replacedPorts.isEmpty)
+    }
+
+    @Test func aBrandNewPortIsNotAReplacement() {
+        let diff = PortDiffer.diff(old: [], new: [makeInfo(port: 3000)], pinned: [])
+        #expect(diff.replacedPorts.isEmpty)
+        #expect(diff.newPorts.map(\.port) == [3000])
+    }
+
+    /// Two processes sharing a port number (different local addresses) must not read
+    /// as replacing each other every scan just because the list order shifted.
+    @Test func aPortHeldByTwoProcessesDoesNotChurn() {
+        let a = PortInfo(pid: 100, port: 3000, proto: "TCP", processName: "node", commandPath: nil)
+        let b = PortInfo(pid: 200, port: 3000, proto: "TCP", processName: "node", commandPath: nil)
+
+        #expect(PortDiffer.diff(old: [a, b], new: [b, a], pinned: []).replacedPorts.isEmpty)
+    }
+
     @Test func everythingIsNewWhenOldIsEmpty() {
         let diff = PortDiffer.diff(old: [], new: [makeInfo(port: 3000)], pinned: [])
         #expect(diff.newPorts.map(\.port) == [3000])

@@ -195,7 +195,11 @@ final class PortStore: ObservableObject {
                     if self.suppressDiffNotificationsOnce {
                         self.suppressDiffNotificationsOnce = false
                     } else {
-                        self.history.record(opened: diff.newPorts, closed: diff.closedPorts)
+                        self.history.record(
+                            opened: diff.newPorts,
+                            closed: diff.closedPorts,
+                            replaced: diff.replacedPorts
+                        )
                         diff.newPorts.forEach(NotificationManager.notifyNewPort)
                         // A pinned port that vanished because its process was just added to
                         // the ignore list didn't actually die -- don't alert on those.

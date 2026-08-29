@@ -30,8 +30,8 @@ struct HistoryView: View {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(history.events) { event in
                             HStack(spacing: 6) {
-                                Image(systemName: event.kind == .opened ? "arrow.up.circle.fill" : "arrow.down.circle.fill")
-                                    .foregroundStyle(event.kind == .opened ? .green : .secondary)
+                                Image(systemName: Self.iconName(for: event.kind))
+                                    .foregroundStyle(Self.iconColor(for: event.kind))
                                     .font(.caption)
                                 Text(verbatim: "\(event.port)")
                                     .font(.system(.caption, design: .monospaced).bold())
@@ -56,8 +56,24 @@ struct HistoryView: View {
         .frame(width: 320)
     }
 
+    private static func iconName(for kind: HistoryStore.Event.Kind) -> String {
+        switch kind {
+        case .opened: return "arrow.up.circle.fill"
+        case .closed: return "arrow.down.circle.fill"
+        case .replaced: return "arrow.triangle.2.circlepath.circle.fill"
+        }
+    }
+
+    private static func iconColor(for kind: HistoryStore.Event.Kind) -> Color {
+        switch kind {
+        case .opened: return .green
+        case .closed: return .secondary
+        case .replaced: return .orange
+        }
+    }
+
     private func eventDescription(_ event: HistoryStore.Event) -> String {
-        var parts = [event.processName, event.kind == .opened ? "opened" : "closed"]
+        var parts = [event.processName, event.kind.rawValue]
         if let projectName = event.projectName {
             parts.insert(projectName, at: 1)
         }
