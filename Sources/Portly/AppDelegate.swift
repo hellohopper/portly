@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import PortlyCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -8,6 +9,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var hotkeyManager: HotkeyManager?
     private let store = PortStore()
+    private let updates = UpdateCoordinator()
     private var cancellables: Set<AnyCancellable> = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -20,19 +22,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.behavior = .transient
         popover.contentSize = NSSize(width: 400, height: 480)
-        popover.contentViewController = NSHostingController(rootView: MenuContentView(store: store, onHotkeyChange: { [weak self] keyCode, modifiers in
+        popover.contentViewController = NSHostingController(rootView: MenuContentView(store: store, updates: updates, onHotkeyChange: { [weak self] keyCode, modifiers in
             self?.hotkeyManager?.reregister(keyCode: keyCode, modifiers: modifiers)
         }))
         self.popover = popover
 
         store.start()
-        store.checkForUpdate()
+        updates.checkForUpdate()
         NotificationManager.requestAuthorization()
 
         store.$hasAlert
             .receive(on: DispatchQueue.main)
             .sink { [weak self] hasAlert in
                 self?.statusItem?.button?.contentTintColor = hasAlert ? .systemRed : nil
+            }
+            .store(in: &cancellables)
+
+        // "Is my API still green" shouldn't require opening the panel. Debounced:
+        // a tint that changes every couple of seconds is noise, not information.
+        Publishers.CombineLatest(store.$healthResults, store.$showsPinnedStatusInMenuBar)
+            .debounce(for: .seconds(3), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.updateMenuBarStatus()
             }
             .store(in: &cancellables)
 
@@ -52,6 +63,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 self?.renderSnapshot()
             }
+        }
+    }
+
+    private func updateMenuBarStatus() {
+        guard let button = statusItem?.button else { return }
+        guard store.showsPinnedStatusInMenuBar, let summary = store.pinnedHealthSummary else {
+            button.title = ""
+            return
+        }
+        button.title = " \(Self.statusGlyph(for: summary))"
+    }
+
+    private static func statusGlyph(for category: HealthChecker.Category) -> String {
+        switch category {
+        case .healthy: return "●"
+        case .slow: return "◐"
+        case .warning: return "▲"
+        case .failing: return "■"
         }
     }
 

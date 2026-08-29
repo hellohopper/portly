@@ -26,6 +26,9 @@ All notable changes to Portly are documented here. Format loosely follows
 - A port changing hands between two polls (a crash-and-respawn, or a restart completing inside one interval) left no trace at all in port history; it's now recorded as a "replaced" event — still without falsely alerting that a pinned port died
 
 ### Changed
+- The CLI now shares the app's enrichment pipeline (`PortEnricher`) instead of reimplementing a subset of it, so `portly list` gains Docker container names and process ancestry, and the two can no longer drift apart
+- One `lsof` covers both TCP and UDP, taking the steady-state subprocess count per refresh from 4 to 3
+- `PortStore` shed the update cycle (`UpdateCoordinator`), config export (`ProjectConfigExporter`), and its hand-rolled UserDefaults codecs (`Defaults`); `PortRow` takes the store rather than eighteen forwarded parameters
 - Polling backs off from 2s to 15s while the menu bar panel is closed, and the per-refresh subprocess count dropped from 6 to 4 (one `ps` snapshot now covers uptime, CPU, memory and the process tree; resolving a process's project no longer runs `lsof` twice)
 - Settings no longer walks the filesystem for git roots on every render, and the editor lookup is resolved once instead of per row
 - `FrameworkDetector` recognizes Astro, SvelteKit, Remix, Storybook, Laravel, Phoenix, Spring Boot, Go (Air/Gin), and Postgres/Redis/MySQL/MongoDB
@@ -43,6 +46,14 @@ All notable changes to Portly are documented here. Format loosely follows
 - LAN exposure badge — ports bound to all interfaces (rather than loopback) are flagged, and searchable as `exposed`. Also shown as a `BIND` column in the CLI and included in exports
 - `portly wait <port> [--timeout <seconds>]` — blocks until something is listening, for use in scripts (exits 1 on timeout)
 - `portly free` — prints an unused port, for `PORT=$(portly free)`
+- `portly restart <port>` and `portly kill <port> --tree`
+- Health checks can target a real endpoint: `.portly.json` gains `"health": {"8000": "/api/health"}` and `"https": {"3000": true}`, so an API that 404s on `/` stops showing a permanent orange badge. TLS validation is relaxed for loopback only
+- The health badge now reflects response time too — yellow when a server answers but slowly, the wedged-server case a status code alone can't show
+- Port conflict detection: `.portly.json` gains `"expects": [3000]`, and when a declared port is held by a *different* project a banner names both and offers to free it
+- "Show connected clients" — see what is actually talking to a port, named by process where resolvable. Runs on demand, never in the poll loop
+- Closed ports now record their command line, so a killed (or idle-auto-killed) server can be relaunched from the history popover
+- "Open log file" for detached processes with no terminal tab to reveal, and "Copy docker logs command" for container-backed ports
+- Optional menu bar health glyph for pinned ports (off by default)
 - Idle port alerts (off by default) — notifies when a port has seen no network traffic for 30 minutes; an optional, separately-toggled "also auto-kill" mode is available for anyone who wants it
 
 ## [0.5.2] - 2026-07-04

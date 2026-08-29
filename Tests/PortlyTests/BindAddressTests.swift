@@ -48,6 +48,36 @@ struct BindAddressTests {
         #expect(result[0].isExposedToNetwork)
     }
 
+    /// Both protocols now come from a single lsof call, tagged by the `P` field.
+    @Test func parsesProtocolFromTheFieldOutput() {
+        let output = """
+        p983
+        crapportd
+        f13
+        PTCP
+        n*:61512
+        p1002
+        cidentityservicesd
+        f13
+        PUDP
+        n127.0.0.1:5353
+        """
+        let entries = PortScanner.parse(output)
+        #expect(entries.count == 2)
+        #expect(entries[0].proto == "TCP")
+        #expect(entries[0].port == 61512)
+        #expect(entries[0].processName == "rapportd")
+        #expect(entries[1].proto == "UDP")
+        #expect(entries[1].port == 5353)
+        #expect(!entries[1].isExposedToNetwork)
+    }
+
+    @Test func skipsSocketsWithNoResolvablePort() {
+        // Unbound UDP sockets report "*:*".
+        let output = "p1\nca\nf1\nPUDP\nn*:*\n"
+        #expect(PortScanner.parse(output).isEmpty)
+    }
+
     @Test func exposedPortsAreSearchable() {
         var info = PortInfo(pid: 1, port: 3000, proto: "TCP", processName: "node", commandPath: nil)
         info.bindAddress = "0.0.0.0"

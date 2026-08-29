@@ -52,6 +52,14 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Throughput sparkline | A tiny trend line next to the CPU/MEM line shows recent network activity, not just the instantaneous rate |
 | Idle port alerts | Optional notification when a port has seen no network traffic for 30 minutes — the dev server you forgot was running; can optionally auto-kill instead (off by default) |
 | LAN exposure badge | An orange `LAN` badge marks ports bound to all interfaces (`--host`, `-b 0.0.0.0`, most Docker publishes) — the ones anybody on your Wi-Fi can reach |
+| Custom health endpoints | `.portly.json` can point a port's probe at a real health path (and mark it HTTPS), so an API that 404s on `/` stops showing a permanent orange badge |
+| Response-time badge | The health badge turns yellow when a server is responding but slowly — the wedged-server case a status code alone can't show |
+| Port conflict banner | When a project's declared port is held by a *different* project, a banner names both and offers to free it |
+| Connected clients | Right-click a port to see what's actually talking to it, by process name where resolvable |
+| Relaunch from history | Closed ports keep their command line, so a killed (or auto-killed) server can be started again from the history popover |
+| Open log file | Finds a log file a detached process is writing to — for servers with no terminal tab to reveal |
+| Docker logs | Right-click a container-backed port to copy its `docker logs -f` command |
+| Menu bar health glyph | Optional at-a-glance status for pinned ports, without opening the panel |
 
 ## Download
 
@@ -85,6 +93,8 @@ portly watch        # re-renders the table every 2s until you Ctrl+C
 portly wait 3000    # block until something is listening (--timeout <s>, exits 1 on timeout)
 portly free         # print an unused port from the common dev ranges
 portly kill 3000    # SIGTERM whatever is listening on port 3000
+portly kill 3000 --tree   # ...along with its wrapper processes (npm → node)
+portly restart 3000 # kill it and relaunch the same command line
 ```
 
 Homebrew installs the `portly` command automatically. For manual installs, symlink it once:

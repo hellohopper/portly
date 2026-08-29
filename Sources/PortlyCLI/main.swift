@@ -27,26 +27,27 @@ func appBundleVersion() -> String? {
     return Bundle(url: bundleURL)?.infoDictionary?["CFBundleShortVersionString"] as? String
 }
 
+/// Shares the app's enrichment pipeline, minus throughput -- that needs a long-lived
+/// `nettop`, which a one-shot command has no way to sample.
 func enrichedPorts() -> [PortInfo] {
     let scanned = PortScanner.scan().sorted { $0.port < $1.port }
-    let uniquePids = Array(Set(scanned.map(\.pid)))
-    let uptimes = UptimeResolver.elapsedSeconds(for: uniquePids)
-    let commandLines = CommandLineResolver.commandLines(for: uniquePids)
+    return runBlocking { await PortEnricher.enrich(scanned, options: .oneShot).ports }
+}
 
-    return scanned.map { info in
-        var info = info
-        info.uptimeSeconds = uptimes[info.pid]
-        if let commandLine = commandLines[info.pid] {
-            info.commandLine = commandLine
-            info.frameworkLabel = FrameworkDetector.detect(
-                processName: info.processName, commandLine: commandLine
-            )
-        }
-        let context = GitProjectResolver.resolve(pid: info.pid)
-        info.projectName = context.projectName
-        info.gitBranch = context.gitBranch
-        return info
+/// Bridges the async pipeline into this synchronous top-level CLI.
+func runBlocking<T: Sendable>(_ work: @escaping @Sendable () async -> T) -> T {
+    let semaphore = DispatchSemaphore(value: 0)
+    let box = ResultBox<T>()
+    Task {
+        box.value = await work()
+        semaphore.signal()
     }
+    semaphore.wait()
+    return box.value!
+}
+
+final class ResultBox<T>: @unchecked Sendable {
+    var value: T?
 }
 
 let watchTimeFormatter: DateFormatter = {
@@ -135,17 +136,45 @@ func run() -> Int32 {
         print(port)
         return 0
 
-    case .kill(let port):
+    case .kill(let port, let tree):
         let matches = PortScanner.scan().filter { $0.port == port }
         guard !matches.isEmpty else {
             FileHandle.standardError.write(Data("No process is listening on port \(port).\n".utf8))
             return 1
         }
-        for info in Set(matches.map(\.pid)) {
-            kill(info, SIGTERM)
+
+        var pids = Set(matches.map(\.pid))
+        if tree {
+            // Outermost first, so nothing respawns the leaf.
+            let table = ProcessTable.snapshot().ancestryTable
+            for info in matches {
+                pids.formUnion(ProcessTreeResolver.ancestry(of: info.pid, in: table).map(\.pid))
+            }
+        }
+        for pid in pids {
+            kill(pid, SIGTERM)
         }
         let names = Set(matches.map(\.processName)).sorted().joined(separator: ", ")
-        print("Sent SIGTERM to \(names) (port \(port)).")
+        print("Sent SIGTERM to \(names) (port \(port))\(tree ? " and its wrappers" : "").")
+        return 0
+
+    case .restart(let port):
+        let matches = enrichedPorts().filter { $0.port == port }
+        guard let target = matches.first else {
+            FileHandle.standardError.write(Data("No process is listening on port \(port).\n".utf8))
+            return 1
+        }
+        guard let commandLine = target.commandLine else {
+            FileHandle.standardError.write(Data("Couldn't read the command line for port \(port).\n".utf8))
+            return 1
+        }
+        kill(target.pid, SIGTERM)
+        Thread.sleep(forTimeInterval: 0.5)
+        guard ProcessLauncher.launch(commandLine: commandLine, workingDirectory: target.workingDirectory) else {
+            FileHandle.standardError.write(Data("Killed it, but relaunching failed: \(commandLine)\n".utf8))
+            return 1
+        }
+        print("Restarted \(target.processName) on port \(port).")
         return 0
 
     case .version:

@@ -3,6 +3,10 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var history: HistoryStore
+    /// Returns false when the recorded command couldn't be started again.
+    let onRelaunch: (HistoryStore.Event) -> Bool
+
+    @State private var failedRelaunch: HistoryStore.Event.ID?
 
     private static let relativeFormatter: RelativeDateTimeFormatter = {
         let formatter = RelativeDateTimeFormatter()
@@ -40,6 +44,17 @@ struct HistoryView: View {
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
                                 Spacer()
+                                if event.isRelaunchable {
+                                    Button(action: { relaunch(event) }) {
+                                        Image(systemName: failedRelaunch == event.id
+                                              ? "exclamationmark.triangle" : "play.circle")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .foregroundStyle(failedRelaunch == event.id ? .orange : Color.accentColor)
+                                    .help(failedRelaunch == event.id
+                                          ? "Couldn't start it again"
+                                          : "Start again: \(event.commandLine ?? "")")
+                                }
                                 Text(Self.relativeFormatter.localizedString(for: event.date, relativeTo: Date()))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -54,6 +69,10 @@ struct HistoryView: View {
         }
         .padding(12)
         .frame(width: 320)
+    }
+
+    private func relaunch(_ event: HistoryStore.Event) {
+        failedRelaunch = onRelaunch(event) ? nil : event.id
     }
 
     private static func iconName(for kind: HistoryStore.Event.Kind) -> String {
