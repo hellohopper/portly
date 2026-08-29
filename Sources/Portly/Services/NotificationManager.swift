@@ -31,6 +31,22 @@ enum NotificationManager {
         post(content)
     }
 
+    static func notifyIdlePort(_ info: PortInfo) {
+        let content = UNMutableNotificationContent()
+        content.title = "Idle port"
+        content.body = "\(info.frameworkLabel ?? info.processName) on port \(info.port) has seen no network activity in 30 minutes"
+        content.sound = .default
+        post(content)
+    }
+
+    static func notifyIdlePortKilled(_ info: PortInfo) {
+        let content = UNMutableNotificationContent()
+        content.title = "Idle port killed"
+        content.body = "\(info.frameworkLabel ?? info.processName) on port \(info.port) was idle for 30 minutes and has been stopped"
+        content.sound = .default
+        post(content)
+    }
+
     private static func post(_ content: UNMutableNotificationContent) {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)
