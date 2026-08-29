@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var hotkeyKeyCode = HotkeyManager.storedKeyCode
     @State private var hotkeyModifiers = HotkeyManager.storedModifiers
     @State private var newIgnoreText = ""
+    @State private var suggestedFreePort: Int?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -44,6 +45,21 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Divider()
+
+            HStack {
+                Text("Free port")
+                Spacer()
+                if let suggestedFreePort {
+                    Text(verbatim: "\(suggestedFreePort)")
+                        .font(.system(.body, design: .monospaced).bold())
+                }
+                Button("Suggest") { suggestedFreePort = store.suggestFreePort() }
+            }
+            Text("Picks an unused port from the common 3000/5000/8000 dev ranges.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
             Divider()
 

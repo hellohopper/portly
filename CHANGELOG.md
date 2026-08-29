@@ -7,6 +7,10 @@ All notable changes to Portly are documented here. Format loosely follows
 
 ### Added
 - `.localhost` proxy — name a port from the globe icon on its row and open it as `name.localhost:7777` instead of hunting down the real port number. Off by default; toggle in Settings. Loopback-only, single fixed port, no elevated privileges required
+- Free port suggestion in Settings — picks an unused port from the common 3000/5000/8000 dev ranges based on the current scan
+- Notification when a *pinned* port's HTTP status crosses into 5xx, not just when it stops listening
+- The search field is now focused automatically when the menu bar panel opens
+- "Open in editor" action (VS Code, Cursor, Zed, Sublime Text) alongside the existing "Reveal owning terminal"
 
 ## [0.5.2] - 2026-07-04
 
