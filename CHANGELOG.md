@@ -11,6 +11,10 @@ All notable changes to Portly are documented here. Format loosely follows
 - Notification when a *pinned* port's HTTP status crosses into 5xx, not just when it stops listening
 - The search field is now focused automatically when the menu bar panel opens
 - "Open in editor" action (VS Code, Cursor, Zed, Sublime Text) alongside the existing "Reveal owning terminal"
+- Docker-forwarded ports now show the actual container name (via `docker ps`), not just a generic Docker badge
+- Export current manual labels as a shareable `.portly.json`, from Settings — merges with (rather than clobbers) whatever the file already has
+- `portly watch` — CLI mode that re-renders the port table every 2s until interrupted
+- Network throughput sparkline next to the CPU/MEM line, showing a recent trend instead of just the instantaneous rate
 
 ## [0.5.2] - 2026-07-04
 

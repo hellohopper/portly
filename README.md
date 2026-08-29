@@ -46,6 +46,10 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Failing-pinned-port alerts | Notified when a pinned port's HTTP status crosses into 5xx, not just when it dies |
 | Search-first panel | The search field is focused the moment the menu bar panel opens, so you can start typing immediately |
 | Open in editor | Jump straight into VS Code, Cursor, Zed, or Sublime Text from a port's row |
+| Docker container names | Ports forwarded through Docker Desktop show the actual container name, resolved via `docker ps` |
+| Export `.portly.json` | Turn your manually-set labels into a shareable team config, from Settings |
+| `portly watch` | CLI mode that re-renders the port table every 2s, for keeping an eye on things from a terminal |
+| Throughput sparkline | A tiny trend line next to the CPU/MEM line shows recent network activity, not just the instantaneous rate |
 
 ## Download
 
@@ -75,6 +79,7 @@ A companion command-line tool ships inside the app bundle:
 ```bash
 portly              # table of listening ports with framework/project/uptime
 portly list --json  # machine-readable output
+portly watch        # re-renders the table every 2s until you Ctrl+C
 portly kill 3000    # SIGTERM whatever is listening on port 3000
 ```
 

@@ -49,6 +49,12 @@ func enrichedPorts() -> [PortInfo] {
     }
 }
 
+let watchTimeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm:ss"
+    return formatter
+}()
+
 func printTable(_ ports: [PortInfo]) {
     guard !ports.isEmpty else {
         print("No listening ports.")
@@ -97,6 +103,15 @@ func run() -> Int32 {
             printTable(ports)
         }
         return 0
+
+    case .watch:
+        while true {
+            print("\u{1B}[2J\u{1B}[H", terminator: "") // clear screen, cursor to top-left
+            print("portly watch — updated \(watchTimeFormatter.string(from: Date())) (Ctrl+C to quit)\n")
+            printTable(enrichedPorts())
+            fflush(stdout)
+            Thread.sleep(forTimeInterval: 2)
+        }
 
     case .kill(let port):
         let matches = PortScanner.scan().filter { $0.port == port }

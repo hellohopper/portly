@@ -108,6 +108,7 @@ final class PortStore: ObservableObject {
                     info.bytesInPerSecond = throughput.bytesInPerSecond
                     info.bytesOutPerSecond = throughput.bytesOutPerSecond
                 }
+                info.throughputHistory = NetworkThroughputResolver.shared.history(for: info.pid)
                 if let commandLine = commandLines[info.pid] {
                     info.commandLine = commandLine
                     info.frameworkLabel = FrameworkDetector.detect(
@@ -124,6 +125,12 @@ final class PortStore: ObservableObject {
                 configLabels.merge(ProjectConfigResolver.shared.labels(fromDirectory: directory)) { current, _ in current }
             }
             let finalConfigLabels = configLabels
+
+            let dockerPorts = enriched.filter(\.isDockerManaged).map(\.port)
+            let containerNames = await DockerContainerResolver.shared.containerNames(for: dockerPorts)
+            for index in enriched.indices {
+                enriched[index].dockerContainerName = containerNames[enriched[index].port]
+            }
 
             let allEnriched = enriched
             await MainActor.run {
@@ -194,6 +201,50 @@ final class PortStore: ObservableObject {
     /// currently listening on, per the latest scan.
     func suggestFreePort() -> Int? {
         FreePortFinder.suggest(excluding: Set(ports.map(\.port)))
+    }
+
+    struct ExportableProject: Identifiable {
+        let root: URL
+        let labels: [Int: String]
+        var id: String { root.path }
+        var name: String { root.lastPathComponent }
+    }
+
+    /// Projects among the currently-listed ports that have at least one manual label,
+    /// grouped by git root -- candidates to write/update a team-shared `.portly.json` for.
+    func exportableProjects() -> [ExportableProject] {
+        var byRoot: [URL: [Int: String]] = [:]
+        for info in ports {
+            guard let label = portLabels[info.port], let workingDirectory = info.workingDirectory else { continue }
+            let root = GitProjectResolver.projectRoot(fromDirectory: workingDirectory)
+            byRoot[root, default: [:]][info.port] = label
+        }
+        return byRoot.map { ExportableProject(root: $0.key, labels: $0.value) }
+            .sorted { $0.name < $1.name }
+    }
+
+    /// Writes `.portly.json` at `project.root`, merging the manual labels in over
+    /// whatever the file already has (manual labels already win when reading, so this
+    /// keeps that same precedence rather than clobbering entries the file previously
+    /// had for ports that aren't currently listening).
+    @discardableResult
+    func exportProjectConfig(_ project: ExportableProject) -> URL? {
+        let configURL = project.root.appendingPathComponent(".portly.json")
+        var merged = ProjectConfigResolver.shared.labels(fromDirectory: project.root.path)
+        merged.merge(project.labels) { _, manual in manual }
+
+        let payload: [String: Any] = [
+            "labels": Dictionary(uniqueKeysWithValues: merged.map { (String($0.key), $0.value) })
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload, options: [.prettyPrinted, .sortedKeys]) else {
+            return nil
+        }
+        do {
+            try data.write(to: configURL)
+            return configURL
+        } catch {
+            return nil
+        }
     }
 
     /// Bumped each time the menu bar panel opens, so the view can refocus the

@@ -355,7 +355,16 @@ private struct PortRow: View {
                         Image(systemName: "shippingbox.fill")
                             .font(.caption2)
                             .foregroundStyle(.blue)
-                            .help("Container-mapped port (Docker)")
+                            .help(info.dockerContainerName.map { "Docker container: \($0)" }
+                                  ?? "Container-mapped port (Docker)")
+                    }
+                    if let dockerContainerName = info.dockerContainerName {
+                        Text(dockerContainerName)
+                            .font(.caption2.monospaced())
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 1)
+                            .background(Color.blue.opacity(0.15))
+                            .clipShape(Capsule())
                     }
                     if let projectName = info.projectName {
                         Text(projectLabel(name: projectName, branch: info.gitBranch))
@@ -440,6 +449,11 @@ private struct PortRow: View {
                                 .fill(energyColor(for: cpuPercent))
                                 .frame(width: 6, height: 6)
                                 .help("Energy impact (based on CPU usage)")
+                        }
+                        if info.throughputHistory.contains(where: { $0 > 0 }) {
+                            Sparkline(samples: info.throughputHistory)
+                                .frame(width: 40, height: 12)
+                                .help("Network throughput, last ~40s")
                         }
                     }
                 }
@@ -588,6 +602,30 @@ private struct PortRow: View {
         case .healthy: return .green
         case .warning: return .orange
         case .failing: return .red
+        }
+    }
+}
+
+/// A tiny filled line chart of recent throughput samples, oldest first.
+private struct Sparkline: View {
+    let samples: [Double]
+
+    var body: some View {
+        GeometryReader { geometry in
+            let peak = max(samples.max() ?? 0, 1)
+            let step = samples.count > 1 ? geometry.size.width / CGFloat(samples.count - 1) : 0
+            Path { path in
+                for (index, sample) in samples.enumerated() {
+                    let x = CGFloat(index) * step
+                    let y = geometry.size.height * (1 - CGFloat(sample / peak))
+                    if index == 0 {
+                        path.move(to: CGPoint(x: x, y: y))
+                    } else {
+                        path.addLine(to: CGPoint(x: x, y: y))
+                    }
+                }
+            }
+            .stroke(Color.accentColor, lineWidth: 1)
         }
     }
 }

@@ -24,6 +24,12 @@ public enum GitProjectResolver {
         currentWorkingDirectory(of: pid)
     }
 
+    /// The git root above `directory`, or `directory` itself when it isn't in a git
+    /// repo -- the directory a per-project config file (e.g. `.portly.json`) belongs at.
+    public static func projectRoot(fromDirectory directory: String) -> URL {
+        findGitDir(startingAt: directory)?.deletingLastPathComponent() ?? URL(fileURLWithPath: directory)
+    }
+
     private static func currentWorkingDirectory(of pid: Int32) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
