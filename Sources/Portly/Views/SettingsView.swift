@@ -64,6 +64,21 @@ struct SettingsView: View {
 
             Divider()
 
+            Toggle("Alert on idle ports", isOn: $store.isIdlePortAlertsEnabled)
+            Text("Notifies when a port has seen no network activity for 30 minutes.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if store.isIdlePortAlertsEnabled {
+                Toggle("Also kill idle ports automatically", isOn: $store.isIdlePortAutoKillEnabled)
+                if store.isIdlePortAutoKillEnabled {
+                    Text("This will SIGTERM a port's process after 30 minutes of no network activity, with no further confirmation.")
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            }
+
+            Divider()
+
             Text("Export .portly.json")
                 .font(.subheadline.bold())
             let exportable = store.exportableProjects()

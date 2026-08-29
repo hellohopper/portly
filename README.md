@@ -50,6 +50,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Export `.portly.json` | Turn your manually-set labels into a shareable team config, from Settings |
 | `portly watch` | CLI mode that re-renders the port table every 2s, for keeping an eye on things from a terminal |
 | Throughput sparkline | A tiny trend line next to the CPU/MEM line shows recent network activity, not just the instantaneous rate |
+| Idle port alerts | Optional notification when a port has seen no network traffic for 30 minutes — the dev server you forgot was running; can optionally auto-kill instead (off by default) |
 
 ## Download
 

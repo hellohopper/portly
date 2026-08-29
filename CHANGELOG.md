@@ -15,6 +15,7 @@ All notable changes to Portly are documented here. Format loosely follows
 - Export current manual labels as a shareable `.portly.json`, from Settings — merges with (rather than clobbers) whatever the file already has
 - `portly watch` — CLI mode that re-renders the port table every 2s until interrupted
 - Network throughput sparkline next to the CPU/MEM line, showing a recent trend instead of just the instantaneous rate
+- Idle port alerts (off by default) — notifies when a port has seen no network traffic for 30 minutes; an optional, separately-toggled "also auto-kill" mode is available for anyone who wants it
 
 ## [0.5.2] - 2026-07-04
 

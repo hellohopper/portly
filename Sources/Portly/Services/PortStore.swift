@@ -165,8 +165,72 @@ final class PortStore: ObservableObject {
 
                 self.refreshHealthStatuses(for: finalEnriched)
                 self.syncProxyRoutes()
+                self.trackIdlePorts(finalEnriched)
             }
         }
+    }
+
+    // MARK: - Idle port alerts
+
+    @Published var isIdlePortAlertsEnabled: Bool = PortStore.loadBool(PortStore.idleAlertsEnabledDefaultsKey) {
+        didSet {
+            guard isIdlePortAlertsEnabled != oldValue else { return }
+            UserDefaults.standard.set(isIdlePortAlertsEnabled, forKey: Self.idleAlertsEnabledDefaultsKey)
+            if !isIdlePortAlertsEnabled {
+                lastActivePortTimestamps.removeAll()
+                idleNotifiedPorts.removeAll()
+            }
+        }
+    }
+    /// Only consulted while `isIdlePortAlertsEnabled` is also on -- a separate toggle
+    /// so turning on notifications never silently starts killing processes too.
+    @Published var isIdlePortAutoKillEnabled: Bool = PortStore.loadBool(PortStore.idleAutoKillEnabledDefaultsKey) {
+        didSet {
+            guard isIdlePortAutoKillEnabled != oldValue else { return }
+            UserDefaults.standard.set(isIdlePortAutoKillEnabled, forKey: Self.idleAutoKillEnabledDefaultsKey)
+        }
+    }
+
+    private static let idleAlertsEnabledDefaultsKey = "idlePortAlertsEnabled"
+    private static let idleAutoKillEnabledDefaultsKey = "idlePortAutoKillEnabled"
+    private let idlePortThreshold: TimeInterval = 30 * 60
+    private var lastActivePortTimestamps: [Int: Date] = [:]
+    private var idleNotifiedPorts: Set<Int> = []
+
+    /// Notifies (and optionally kills) TCP ports that have shown no measurable
+    /// network throughput for `idlePortThreshold` -- a nudge for the dev server you
+    /// forgot was still running. Notifies at most once per idle stretch; a port that
+    /// sees traffic again is eligible to alert again the next time it goes quiet.
+    private func trackIdlePorts(_ ports: [PortInfo]) {
+        guard isIdlePortAlertsEnabled else { return }
+        let now = Date()
+        let livePorts = Set(ports.map(\.port))
+        lastActivePortTimestamps = lastActivePortTimestamps.filter { livePorts.contains($0.key) }
+        idleNotifiedPorts.formIntersection(livePorts)
+
+        for info in ports where info.proto.contains("TCP") {
+            let isActive = (info.bytesInPerSecond ?? 0) + (info.bytesOutPerSecond ?? 0) > 1024
+            if isActive || lastActivePortTimestamps[info.port] == nil {
+                lastActivePortTimestamps[info.port] = now
+                idleNotifiedPorts.remove(info.port)
+                continue
+            }
+            guard !idleNotifiedPorts.contains(info.port) else { continue }
+            guard let lastActive = lastActivePortTimestamps[info.port],
+                  now.timeIntervalSince(lastActive) >= idlePortThreshold else { continue }
+
+            idleNotifiedPorts.insert(info.port)
+            if isIdlePortAutoKillEnabled {
+                NotificationManager.notifyIdlePortKilled(info)
+                kill(info)
+            } else {
+                NotificationManager.notifyIdlePort(info)
+            }
+        }
+    }
+
+    private static func loadBool(_ key: String) -> Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? false
     }
 
     private func refreshHealthStatuses(for ports: [PortInfo]) {
