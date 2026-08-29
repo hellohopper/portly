@@ -28,6 +28,8 @@ All notable changes to Portly are documented here. Format loosely follows
 ### Changed
 - The CLI now shares the app's enrichment pipeline (`PortEnricher`) instead of reimplementing a subset of it, so `portly list` gains Docker container names and process ancestry, and the two can no longer drift apart
 - One `lsof` covers both TCP and UDP, taking the steady-state subprocess count per refresh from 4 to 3
+- A process's working directory now comes from `proc_pidinfo` rather than an `lsof` call per newly-seen pid — the last place where subprocess count grew with the number of listening ports
+- Hiding a process via the ignore list re-filters the existing list instead of triggering a full rescan
 - `PortStore` shed the update cycle (`UpdateCoordinator`), config export (`ProjectConfigExporter`), and its hand-rolled UserDefaults codecs (`Defaults`); `PortRow` takes the store rather than eighteen forwarded parameters
 - Polling backs off from 2s to 15s while the menu bar panel is closed, and the per-refresh subprocess count dropped from 6 to 4 (one `ps` snapshot now covers uptime, CPU, memory and the process tree; resolving a process's project no longer runs `lsof` twice)
 - Settings no longer walks the filesystem for git roots on every render, and the editor lookup is resolved once instead of per row

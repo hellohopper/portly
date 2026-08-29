@@ -66,7 +66,12 @@ final class PortStore: ObservableObject {
 
     /// The label to show for a port: the user's manual label wins over .portly.json.
     func effectiveLabel(for port: Int) -> String? {
-        portLabels[port] ?? projectConfigLabels[port]
+        PortLabelResolver.effectiveLabel(for: port, manual: portLabels, fromConfig: projectConfigLabels)
+    }
+
+    /// Whether a row survives the search field, labels included.
+    func matchesSearch(_ info: PortInfo, needle: String) -> Bool {
+        PortLabelResolver.matches(info, needle: needle, manual: portLabels, fromConfig: projectConfigLabels)
     }
 
     static let ignoredProcessNamesDefaultsKey = "ignoredProcessNames"
@@ -407,17 +412,26 @@ final class PortStore: ObservableObject {
     func ignoreProcessName(_ processName: String) {
         ignoredProcessNames.insert(processName.lowercased())
         Defaults.set(ignoredProcessNames, for: Self.ignoredProcessNamesDefaultsKey)
-        // The ports about to disappear from the list are being hidden, not closed.
-        suppressDiffNotificationsOnce = true
-        refresh()
+        // Hiding rows needs no rescan: the answer is already in `unfilteredPorts`, and
+        // re-running the whole pipeline just to drop rows is wasted work. Reapplying
+        // the filter locally also avoids a diff that reads as "those ports closed".
+        applyIgnoreFilter()
     }
 
     func unignoreProcessName(_ processName: String) {
         ignoredProcessNames.remove(processName.lowercased())
         Defaults.set(ignoredProcessNames, for: Self.ignoredProcessNamesDefaultsKey)
-        // Likewise: these have been running all along, they were just filtered out.
+        // Un-hiding can reveal ports the last scan didn't retain details for, so this
+        // direction does need fresh data -- but the reappearing rows have been running
+        // all along and must not be announced as new.
         suppressDiffNotificationsOnce = true
         refresh()
+    }
+
+    /// Re-derives the visible list from the last scan, without rescanning.
+    private func applyIgnoreFilter() {
+        ports = unfilteredPorts.filter { !ignoredProcessNames.contains($0.processName.lowercased()) }
+        syncProxyRoutes()
     }
 
 
