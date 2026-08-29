@@ -4,28 +4,40 @@ import AppKit
 
 struct PortRow: View {
     let info: PortInfo
-    let isPinned: Bool
+    @ObservedObject var store: PortStore
     let isSelecting: Bool
     let isSelected: Bool
     let isFocused: Bool
-    let label: String?
-    let healthStatus: Int?
-    let onKill: () -> Void
-    let onKillTree: () -> Void
-    let onTogglePin: () -> Void
     let onToggleSelect: () -> Void
-    let onRestart: () -> Void
-    let onIgnore: () -> Void
-    let onSetLabel: (String) -> Void
-    let proxyName: String?
-    let isProxyEnabled: Bool
-    let onSetProxyName: (String) -> PortStore.ProxyNameError?
+
+    // Everything below used to be passed in as a separate parameter; they are all
+    // plain lookups on the store, and keeping fifteen of them in sync at the call
+    // site was pure overhead.
+    private var isPinned: Bool { store.pinnedPorts.contains(info.port) }
+    private var label: String? { store.effectiveLabel(for: info.port) }
+    private var health: HealthChecker.Health? { store.healthResults[info.port] }
+    private var proxyName: String? { store.proxyNames[info.port] }
+    private var isProxyEnabled: Bool { store.isLocalhostProxyEnabled }
+
+    private func onKill() { store.kill(info) }
+    private func onKillTree() { store.killTree(info) }
+    private func onTogglePin() { store.togglePin(info.port) }
+    private func onRestart() { store.restart(info) }
+    private func onIgnore() { store.ignoreProcessName(info.processName) }
+    private func onSetLabel(_ value: String) { store.setLabel(value, for: info.port) }
+    private func onSetProxyName(_ value: String) -> PortStore.ProxyNameError? {
+        store.setProxyName(value, for: info.port)
+    }
 
     @State private var isEditingLabel = false
     @State private var labelText = ""
     @State private var isEditingProxyName = false
     @State private var proxyNameText = ""
     @State private var proxyNameError: String?
+    @State private var isShowingPeers = false
+    @State private var isLoadingPeers = false
+    @State private var peers: [ConnectionResolver.Peer] = []
+    @State private var showsNoLogAlert = false
 
     var body: some View {
         HStack {
@@ -45,15 +57,15 @@ struct PortRow: View {
                 HStack(spacing: 6) {
                     Text(verbatim: "\(info.port)")
                         .font(.system(.body, design: .monospaced).bold())
-                    if let healthStatus {
-                        Text(verbatim: "\(healthStatus)")
+                    if let health {
+                        Text(verbatim: "\(health.statusCode)")
                             .font(.system(.caption2, design: .monospaced).bold())
-                            .foregroundStyle(healthColor(for: healthStatus))
+                            .foregroundStyle(healthColor(for: health.category))
                             .padding(.horizontal, 5)
                             .padding(.vertical, 1)
-                            .background(healthColor(for: healthStatus).opacity(0.15))
+                            .background(healthColor(for: health.category).opacity(0.15))
                             .clipShape(Capsule())
-                            .help("HTTP status from probing localhost:\(info.port)")
+                            .help(healthTooltip(health))
                     }
                     if info.isExposedToNetwork {
                         Text("LAN")
@@ -222,14 +234,59 @@ struct PortRow: View {
             if let proxyName {
                 Button("Copy .localhost URL") { copyToPasteboard(proxyURLString(name: proxyName)) }
             }
-            if info.proto.contains("TCP") {
+            if info.isTCP {
                 Button("Copy as curl") { copyToPasteboard(CurlCommandBuilder.command(port: info.port)) }
+                Button("Show connected clients") { loadPeers() }
+            }
+            if let containerName = info.dockerContainerName {
+                Button("Copy docker logs command") {
+                    copyToPasteboard("docker logs -f \(containerName)")
+                }
+            } else {
+                Button("Open log file") { openLogFile() }
             }
             if !info.ancestry.isEmpty {
                 Button("Kill process tree (\(ProcessTreeResolver.describe(leafName: info.processName, ancestry: info.ancestry)))",
                        role: .destructive, action: onKillTree)
             }
             Button("Ignore \(info.processName)", action: onIgnore)
+        }
+        .popover(isPresented: $isShowingPeers) {
+            PeersPopover(port: info.port, peers: peers, isLoading: isLoadingPeers)
+        }
+        .alert("No log file found", isPresented: $showsNoLogAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("\(info.processName) isn't writing to a log file Portly can see — a server running in the foreground writes to its terminal instead.")
+        }
+    }
+
+    private func loadPeers() {
+        isLoadingPeers = true
+        isShowingPeers = true
+        let port = info.port
+        Task {
+            // Runs its own lsof, so it stays off the 2s poll and only happens on ask.
+            let found = await Task.detached {
+                ConnectionResolver.peers(forPort: port, processTable: [:])
+            }.value
+            peers = found
+            isLoadingPeers = false
+        }
+    }
+
+    private func openLogFile() {
+        let pid = info.pid
+        let workingDirectory = info.workingDirectory
+        Task {
+            let path = await Task.detached {
+                LogFileResolver.logFile(pid: pid, workingDirectory: workingDirectory)
+            }.value
+            guard let path else {
+                showsNoLogAlert = true
+                return
+            }
+            NSWorkspace.shared.open(URL(fileURLWithPath: path))
         }
     }
 
@@ -314,12 +371,24 @@ struct PortRow: View {
         }
     }
 
-    private func healthColor(for statusCode: Int) -> Color {
-        switch HealthChecker.Category.classify(statusCode: statusCode) {
+    private func healthColor(for category: HealthChecker.Category) -> Color {
+        switch category {
         case .healthy: return .green
+        case .slow: return .yellow
         case .warning: return .orange
         case .failing: return .red
         }
+    }
+
+    private func healthTooltip(_ health: HealthChecker.Health) -> String {
+        let probed = store.projectConfig.healthTarget(for: info.port)
+        let scheme = probed.useTLS ? "https" : "http"
+        let millis = Int((health.latency * 1000).rounded())
+        var text = "HTTP \(health.statusCode) in \(millis)ms from \(scheme)://localhost:\(info.port)\(probed.path)"
+        if health.category == .slow {
+            text += " — responding, but slowly"
+        }
+        return text
     }
 }
 

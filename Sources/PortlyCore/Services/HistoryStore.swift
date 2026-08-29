@@ -19,6 +19,16 @@ public final class HistoryStore: ObservableObject {
         public let port: Int
         public let processName: String
         public let projectName: String?
+        /// Captured so a closed port can be started again -- restart only works while
+        /// the process is alive, and the moment it's killed the command line is gone.
+        /// Optional for backward compatibility with history written before this existed.
+        public var commandLine: String?
+        public var workingDirectory: String?
+
+        /// Whether this event carries enough detail to relaunch it.
+        public var isRelaunchable: Bool {
+            kind == .closed && commandLine?.isEmpty == false && workingDirectory != nil
+        }
     }
 
     public static let maxEvents = 300
@@ -51,7 +61,8 @@ public final class HistoryStore: ObservableObject {
         }
         for info in closed {
             newEvents.append(Event(date: date, kind: .closed, port: info.port,
-                                   processName: info.processName, projectName: info.projectName))
+                                   processName: info.processName, projectName: info.projectName,
+                                   commandLine: info.commandLine, workingDirectory: info.workingDirectory))
         }
         for info in replaced {
             newEvents.append(Event(date: date, kind: .replaced, port: info.port,

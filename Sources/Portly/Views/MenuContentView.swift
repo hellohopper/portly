@@ -4,6 +4,7 @@ import AppKit
 
 struct MenuContentView: View {
     @ObservedObject var store: PortStore
+    @ObservedObject var updates: UpdateCoordinator
     let onHotkeyChange: (UInt32, UInt32) -> Void
     @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
     @State private var searchText: String = ""
@@ -44,8 +45,13 @@ struct MenuContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if let update = store.availableUpdate {
+            if let update = updates.availableUpdate {
                 updateBanner(update)
+                Divider()
+            }
+
+            ForEach(store.portConflicts) { conflict in
+                conflictBanner(conflict)
                 Divider()
             }
 
@@ -77,22 +83,11 @@ struct MenuContentView: View {
                                 ForEach(section.ports) { port in
                                     PortRow(
                                         info: port,
-                                        isPinned: store.pinnedPorts.contains(port.port),
+                                        store: store,
                                         isSelecting: isSelecting,
                                         isSelected: selectedRows.contains(port.id),
                                         isFocused: focusedRowID == port.id,
-                                        label: store.effectiveLabel(for: port.port),
-                                        healthStatus: store.healthStatuses[port.port],
-                                        onKill: { store.kill(port) },
-                                        onKillTree: { store.killTree(port) },
-                                        onTogglePin: { store.togglePin(port.port) },
-                                        onToggleSelect: { toggleSelection(port.id) },
-                                        onRestart: { store.restart(port) },
-                                        onIgnore: { store.ignoreProcessName(port.processName) },
-                                        onSetLabel: { store.setLabel($0, for: port.port) },
-                                        proxyName: store.proxyNames[port.port],
-                                        isProxyEnabled: store.isLocalhostProxyEnabled,
-                                        onSetProxyName: { store.setProxyName($0, for: port.port) }
+                                        onToggleSelect: { toggleSelection(port.id) }
                                     )
                                     Divider()
                                 }
@@ -137,7 +132,7 @@ struct MenuContentView: View {
                     }
                     .help("Port history")
                     .popover(isPresented: $isHistoryPresented) {
-                        HistoryView(history: store.history)
+                        HistoryView(history: store.history, onRelaunch: { store.relaunch($0) })
                     }
                     Button(action: { isSettingsPresented.toggle() }) {
                         Image(systemName: "gearshape")
@@ -236,15 +231,39 @@ struct MenuContentView: View {
         selectedRows.removeAll()
     }
 
+    /// "3000 is `web`'s port, but `admin` is holding it" -- the morning failure where
+    /// today's dev server silently binds 3001 instead.
+    private func conflictBanner(_ conflict: PortConflict) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Port \(conflict.port) is \(conflict.expectedBy)'s\(conflict.expectedLabel.map { " \($0)" } ?? "")")
+                    .font(.caption.bold())
+                Text("held by \(conflict.heldBy.processName) (pid \(conflict.heldBy.pid))")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Free it") { store.kill(conflict.heldBy) }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Color.orange.opacity(0.12))
+    }
+
     private func updateBanner(_ update: UpdateChecker.UpdateInfo) -> some View {
         HStack {
             Image(systemName: "arrow.down.circle.fill")
             Text(updateBannerText(update))
             Spacer()
-            switch store.updatePhase {
+            switch updates.phase {
             case .idle, .failed:
                 Button(update.dmgURL != nil ? "Download & Install" : "View") {
-                    store.installUpdate()
+                    updates.install()
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(Color.accentColor)
@@ -258,7 +277,7 @@ struct MenuContentView: View {
     }
 
     private func updateBannerText(_ update: UpdateChecker.UpdateInfo) -> String {
-        switch store.updatePhase {
+        switch updates.phase {
         case .idle:
             return "Update available: v\(update.version)"
         case .downloading:

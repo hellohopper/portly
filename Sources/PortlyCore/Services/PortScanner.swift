@@ -3,10 +3,16 @@ import Foundation
 public enum PortScanner {
 
     public static func scan() -> [PortInfo] {
-        var results: [PortInfo] = []
-        results.append(contentsOf: scan(protoFlag: "-iTCP", extraArgs: ["-sTCP:LISTEN"], proto: "TCP"))
-        results.append(contentsOf: scan(protoFlag: "-iUDP", extraArgs: [], proto: "UDP"))
-        return mergeSamePidAndPort(dedupe(results))
+        // One lsof covers both protocols: `-sTCP:LISTEN` constrains only the TCP
+        // selection, and the `P` field tags each socket so the two can be told apart.
+        // -w suppresses the per-unreachable-mount warnings that would otherwise flood
+        // stderr on machines with stale network mounts.
+        let output = Shell.run(
+            "/usr/sbin/lsof",
+            ["-nPw", "-iTCP", "-sTCP:LISTEN", "-iUDP", "-F", "pcnP"]
+        )
+        guard let output else { return [] }
+        return mergeSamePidAndPort(dedupe(parse(output)))
     }
 
     /// A process listening on both TCP and UDP for the same port shows up as two
@@ -56,15 +62,13 @@ public enum PortScanner {
         return result
     }
 
-    private static func scan(protoFlag: String, extraArgs: [String], proto: String) -> [PortInfo] {
-        // -w suppresses the per-unreachable-mount warnings that would otherwise flood
-        // stderr on machines with stale network mounts.
-        let output = Shell.run("/usr/sbin/lsof", ["-nPw", protoFlag] + extraArgs + ["-F", "pcn"])
-        guard let output else { return [] }
-
+    /// Parses lsof's `-F pcnP` field output. Fields are stateful: `p`/`c` open a
+    /// process block, then each socket contributes a `P` (protocol) and `n` (name).
+    static func parse(_ output: String) -> [PortInfo] {
         var entries: [PortInfo] = []
         var currentPid: Int32?
-        var currentCommand: String = ""
+        var currentCommand = ""
+        var currentProto = ""
 
         for rawLine in output.split(separator: "\n") {
             guard let tag = rawLine.first else { continue }
@@ -75,13 +79,17 @@ public enum PortScanner {
                 currentPid = Int32(value)
             case "c":
                 currentCommand = value
+            case "P":
+                currentProto = value.uppercased()
             case "n":
-                guard let pid = currentPid, let endpoint = extractEndpoint(from: value) else { continue }
+                guard let pid = currentPid,
+                      !currentProto.isEmpty,
+                      let endpoint = extractEndpoint(from: value) else { continue }
                 entries.append(
                     PortInfo(
                         pid: pid,
                         port: endpoint.port,
-                        proto: proto,
+                        proto: currentProto,
                         processName: currentCommand,
                         commandPath: nil,
                         bindAddress: endpoint.address

@@ -6,7 +6,8 @@ enum CLICommand: Equatable {
     case watch
     case wait(port: Int, timeout: Int)
     case free
-    case kill(port: Int)
+    case kill(port: Int, tree: Bool)
+    case restart(port: Int)
     case version
     case help
 
@@ -33,8 +34,14 @@ enum CLICommand: Equatable {
                   let timeout = Int(rest[1]), timeout > 0 else { return nil }
             return .wait(port: port, timeout: timeout)
         case "kill":
+            guard arguments.count >= 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
+            let rest = Array(arguments.dropFirst(2))
+            if rest.isEmpty { return .kill(port: port, tree: false) }
+            guard rest == ["--tree"] else { return nil }
+            return .kill(port: port, tree: true)
+        case "restart":
             guard arguments.count == 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
-            return .kill(port: port)
+            return .restart(port: port)
         case "version", "--version", "-v":
             return .version
         case "help", "--help", "-h":
@@ -57,6 +64,8 @@ enum CLICommand: Equatable {
                        (--timeout <seconds>, default 60; exits 1 on timeout)
       free             Print an unused port from the common dev ranges
       kill <port>      SIGTERM the process listening on <port>
+                       (--tree also kills its wrapper processes, e.g. npm -> node)
+      restart <port>   Kill and relaunch it with the same command line
       version          Print the version
       help             Show this help
 

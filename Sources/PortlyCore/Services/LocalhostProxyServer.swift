@@ -127,6 +127,19 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         return "Localhost proxy failed to start: \(error.debugDescription)"
     }
 
+    /// Builds the name -> port table from the user's mappings, dropping any name whose
+    /// port isn't actually listening over TCP right now. A dead mapping would just
+    /// dead-end the connection; dropping it also lets a *new* process claiming that
+    /// name take over cleanly instead of racing a stale entry.
+    public static func routes(names: [Int: String], livePorts: [PortInfo]) -> [String: Int] {
+        let liveTCPPorts = Set(livePorts.filter(\.isTCP).map(\.port))
+        var routes: [String: Int] = [:]
+        for (port, name) in names where liveTCPPorts.contains(port) {
+            routes[name] = port
+        }
+        return routes
+    }
+
     /// Replaces the full name -> port routing table. Called whenever the user edits a
     /// name or the underlying port list changes, so stale mappings stop resolving.
     public func updateRoutes(_ routes: [String: Int]) {

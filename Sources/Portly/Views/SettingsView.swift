@@ -67,6 +67,13 @@ struct SettingsView: View {
 
             Divider()
 
+            Toggle("Show pinned port health in menu bar", isOn: $store.showsPinnedStatusInMenuBar)
+            Text("Adds a small status glyph next to the icon: ● healthy, ◐ slow, ▲ 4xx, ■ 5xx.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
             Toggle("Alert on idle ports", isOn: $store.isIdlePortAlertsEnabled)
             Text("Notifies when a port has seen no network activity for 30 minutes.")
                 .font(.caption)
