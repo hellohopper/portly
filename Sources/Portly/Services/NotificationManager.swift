@@ -23,6 +23,14 @@ enum NotificationManager {
         post(content)
     }
 
+    static func notifyHealthRegression(_ info: PortInfo, statusCode: Int) {
+        let content = UNMutableNotificationContent()
+        content.title = "Pinned port is failing"
+        content.body = "\(info.frameworkLabel ?? info.processName) on port \(info.port) is now returning HTTP \(statusCode)"
+        content.sound = .default
+        post(content)
+    }
+
     private static func post(_ content: UNMutableNotificationContent) {
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request)

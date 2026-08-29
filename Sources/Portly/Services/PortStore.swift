@@ -43,6 +43,7 @@ final class PortStore: ObservableObject {
     /// something else) so Settings can tell the user instead of it silently doing nothing.
     @Published private(set) var proxyStartupError: String?
     @Published var hasAlert: Bool = false
+    @Published private(set) var searchFocusRequestID = UUID()
     @Published private(set) var updatePhase: AutoUpdater.Phase = .idle
     /// port -> latest HTTP status code from the health probe (absent = not an HTTP server).
     @Published private(set) var healthStatuses: [Int: Int] = [:]
@@ -164,12 +165,42 @@ final class PortStore: ObservableObject {
     private func refreshHealthStatuses(for ports: [PortInfo]) {
         let tcpPorts = ports.filter { $0.proto.contains("TCP") }.map(\.port)
         Task {
-            self.healthStatuses = await HealthChecker.shared.statuses(for: tcpPorts)
+            let newStatuses = await HealthChecker.shared.statuses(for: tcpPorts)
+            notifyHealthRegressions(old: healthStatuses, new: newStatuses, ports: ports)
+            healthStatuses = newStatuses
+        }
+    }
+
+    /// Notifies when a *pinned* port's HTTP status crosses into 5xx -- scoped to
+    /// pinned ports (like the "pinned port died" alert) so a dev server's normal
+    /// 404s on unrelated routes don't turn this into noise.
+    private func notifyHealthRegressions(old: [Int: Int], new: [Int: Int], ports: [PortInfo]) {
+        for (port, newStatus) in new {
+            guard pinnedPorts.contains(port) else { continue }
+            // No prior reading yet -- nothing to regress from.
+            guard let oldStatus = old[port] else { continue }
+            guard HealthChecker.Category.classify(statusCode: oldStatus) != .failing,
+                  HealthChecker.Category.classify(statusCode: newStatus) == .failing else { continue }
+            guard let info = ports.first(where: { $0.port == port }) else { continue }
+            NotificationManager.notifyHealthRegression(info, statusCode: newStatus)
         }
     }
 
     func clearAlert() {
         hasAlert = false
+    }
+
+    /// A port from the common dev-server ranges (3000s/5000s/8000s) that nothing is
+    /// currently listening on, per the latest scan.
+    func suggestFreePort() -> Int? {
+        FreePortFinder.suggest(excluding: Set(ports.map(\.port)))
+    }
+
+    /// Bumped each time the menu bar panel opens, so the view can refocus the
+    /// search field even though it's the same SwiftUI hierarchy being re-shown
+    /// (the popover's content view isn't recreated on each show).
+    func requestSearchFocus() {
+        searchFocusRequestID = UUID()
     }
 
     private func projectContext(for pid: Int32) async -> (projectName: String?, gitBranch: String?, workingDirectory: String?) {

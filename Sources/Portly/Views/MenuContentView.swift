@@ -30,6 +30,7 @@ struct MenuContentView: View {
     @State private var focusedPort: Int?
     @State private var keyMonitor: Any?
     @State private var hostWindow: NSWindow?
+    @FocusState private var isSearchFocused: Bool
 
     private var theme: AppTheme {
         AppTheme(rawValue: themeRawValue) ?? .system
@@ -168,6 +169,7 @@ struct MenuContentView: View {
         .background(WindowAccessor(window: $hostWindow))
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
+        .onChange(of: store.searchFocusRequestID) { _ in isSearchFocused = true }
     }
 
     // MARK: - Keyboard navigation
@@ -284,6 +286,7 @@ struct MenuContentView: View {
                 .foregroundStyle(.secondary)
             TextField("Search ports, projects, frameworks…", text: $searchText)
                 .textFieldStyle(.plain)
+                .focused($isSearchFocused)
             if !searchText.isEmpty {
                 Button(action: { searchText = "" }) {
                     Image(systemName: "xmark.circle.fill")
@@ -453,6 +456,13 @@ private struct PortRow: View {
             }
             .buttonStyle(.borderless)
             .help("Reveal owning terminal")
+            if let workingDirectory = info.workingDirectory, EditorRevealer.isAvailable() {
+                Button(action: { EditorRevealer.open(workingDirectory: workingDirectory) }) {
+                    Image(systemName: "chevron.left.forwardslash.chevron.right")
+                }
+                .buttonStyle(.borderless)
+                .help("Open project in editor")
+            }
             if info.commandLine != nil {
                 Button(action: onRestart) {
                     Image(systemName: "arrow.clockwise")

@@ -42,6 +42,10 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Keyboard navigation | ↑/↓ to move, Enter to open in browser, ⌘⌫ to kill, Esc to clear search |
 | CLI companion | `portly list` / `portly kill 3000` from your terminal — see [CLI](#cli) |
 | `.localhost` proxy | Give any port a `name.localhost:7777` address (globe icon on its row) so you don't have to remember the port number |
+| Free port suggestion | Settings can suggest an unused port from the common 3000/5000/8000 dev ranges |
+| Failing-pinned-port alerts | Notified when a pinned port's HTTP status crosses into 5xx, not just when it dies |
+| Search-first panel | The search field is focused the moment the menu bar panel opens, so you can start typing immediately |
+| Open in editor | Jump straight into VS Code, Cursor, Zed, or Sublime Text from a port's row |
 
 ## Download
 
