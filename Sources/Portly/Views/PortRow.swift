@@ -33,7 +33,6 @@ struct PortRow: View {
     @State private var labelText = ""
     @State private var isEditingProxyName = false
     @State private var proxyNameText = ""
-    @State private var proxyNameError: String?
     @State private var isShowingPeers = false
     @State private var isLoadingPeers = false
     @State private var peers: [ConnectionResolver.Peer] = []
@@ -107,15 +106,13 @@ struct PortRow: View {
                     .buttonStyle(.borderless)
                     .help("Add a custom label")
                     .popover(isPresented: $isEditingLabel) {
-                        HStack {
-                            TextField("Label", text: $labelText, onCommit: commitLabel)
-                                .textFieldStyle(.roundedBorder)
-                                .frame(width: 160)
-                            Button("Save", action: commitLabel)
-                        }
-                        .padding(10)
+                        InlineEditPopover(
+                            placeholder: "Label",
+                            text: $labelText,
+                            onCommit: commitLabel
+                        )
                     }
-                    if isProxyEnabled && info.proto.contains("TCP") {
+                    if isProxyEnabled && info.isTCP {
                         Button(action: beginEditingProxyName) {
                             Image(systemName: "globe")
                                 .font(.caption2)
@@ -123,23 +120,13 @@ struct PortRow: View {
                         .buttonStyle(.borderless)
                         .help("Give this port a name.localhost address")
                         .popover(isPresented: $isEditingProxyName) {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    TextField("name", text: $proxyNameText, onCommit: commitProxyName)
-                                        .textFieldStyle(.roundedBorder)
-                                        .frame(width: 120)
-                                    Text(".localhost:\(LocalhostProxyServer.port)")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    Button("Save", action: commitProxyName)
-                                }
-                                if let proxyNameError {
-                                    Text(proxyNameError)
-                                        .font(.caption2)
-                                        .foregroundStyle(.red)
-                                }
-                            }
-                            .padding(10)
+                            InlineEditPopover(
+                                placeholder: "name",
+                                suffix: ".localhost:\(LocalhostProxyServer.port)",
+                                fieldWidth: 120,
+                                text: $proxyNameText,
+                                onCommit: commitProxyName
+                            )
                         }
                     }
                 }
@@ -185,42 +172,14 @@ struct PortRow: View {
                 }
             }
             Spacer()
-            Button(action: onTogglePin) {
-                Image(systemName: isPinned ? "star.fill" : "star")
-                    .foregroundStyle(isPinned ? .yellow : .secondary)
-            }
-            .buttonStyle(.borderless)
-            .help(isPinned ? "Unpin" : "Pin to top")
-            Button(action: { TerminalRevealer.reveal(pid: info.pid) }) {
-                Image(systemName: "terminal")
-            }
-            .buttonStyle(.borderless)
-            .help("Reveal owning terminal")
-            if let workingDirectory = info.workingDirectory, EditorRevealer.isInstalled {
-                Button(action: { EditorRevealer.open(workingDirectory: workingDirectory) }) {
-                    Image(systemName: "chevron.left.forwardslash.chevron.right")
-                }
-                .buttonStyle(.borderless)
-                .help("Open project in editor")
-            }
-            if info.commandLine != nil {
-                Button(action: onRestart) {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.borderless)
-                .help("Restart (kill + relaunch same command)")
-            }
-            if info.proto.contains("TCP") {
-                Button(action: openInBrowser) {
-                    Image(systemName: "safari")
-                }
-                .buttonStyle(.borderless)
-                .help("Open localhost:\(info.port) in browser")
-            }
-            Button(role: .destructive, action: onKill) {
-                Image(systemName: "xmark.circle.fill")
-            }
-            .buttonStyle(.borderless)
+            PortRowActions(
+                info: info,
+                isPinned: isPinned,
+                onTogglePin: onTogglePin,
+                onRestart: onRestart,
+                onKill: onKill,
+                onOpenInBrowser: openInBrowser
+            )
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -295,25 +254,27 @@ struct PortRow: View {
         isEditingLabel = true
     }
 
-    private func commitLabel() {
+    /// Labels accept anything, so this never reports an error.
+    private func commitLabel() -> String? {
         onSetLabel(labelText)
         isEditingLabel = false
+        return nil
     }
 
     private func beginEditingProxyName() {
         proxyNameText = proxyName ?? ""
-        proxyNameError = nil
         isEditingProxyName = true
     }
 
-    private func commitProxyName() {
+    private func commitProxyName() -> String? {
         switch onSetProxyName(proxyNameText) {
         case nil:
             isEditingProxyName = false
+            return nil
         case .invalid:
-            proxyNameError = "Lowercase letters, digits, hyphens only."
+            return "Lowercase letters, digits, hyphens only."
         case .alreadyUsed(let port):
-            proxyNameError = "Already used by port \(port)."
+            return "Already used by port \(port)."
         }
     }
 

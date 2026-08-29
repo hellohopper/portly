@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#endif
 
 public enum GitProjectResolver {
 
@@ -38,15 +41,27 @@ public enum GitProjectResolver {
         findGitDir(startingAt: directory)?.deletingLastPathComponent() ?? URL(fileURLWithPath: directory)
     }
 
-    private static func currentWorkingDirectory(of pid: Int32) -> String? {
-        guard let output = Shell.run("/usr/sbin/lsof", ["-aw", "-p", "\(pid)", "-d", "cwd", "-Fn"]) else {
-            return nil
-        }
+    /// A process's cwd, straight from the kernel.
+    ///
+    /// This used to shell out to `lsof` -- the last place in the app whose subprocess
+    /// count grew with the number of listening ports, since it runs once per newly
+    /// seen pid. `proc_pidinfo` answers the same question with a syscall.
+    ///
+    /// It returns nothing for processes owned by another user (reading their vnode
+    /// info needs root), exactly like the `lsof` version did, so callers already
+    /// handle a nil cwd.
+    static func currentWorkingDirectory(of pid: Int32) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        let written = proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size)
+        guard written == size else { return nil }
 
-        for line in output.split(separator: "\n") where line.hasPrefix("n") {
-            return String(line.dropFirst())
+        let path = withUnsafePointer(to: &info.pvi_cdir.vip_path) { pointer in
+            pointer.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) {
+                String(cString: $0)
+            }
         }
-        return nil
+        return path.isEmpty ? nil : path
     }
 
     /// Walks up from `path` looking for a ".git" directory or file (worktrees use a file).

@@ -28,15 +28,7 @@ struct MenuContentView: View {
         // Normalise the needle once per filter pass rather than once per row.
         let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !needle.isEmpty else { return store.ports }
-        return store.ports.filter { matchesSearch($0, needle: needle) }
-    }
-
-    private func matchesSearch(_ info: PortInfo, needle: String) -> Bool {
-        if info.matches(query: needle) { return true }
-        // Labels (manual or .portly.json) live in the store keyed by port, not on
-        // PortInfo, so they need their own check to be searchable.
-        guard let label = store.effectiveLabel(for: info.port) else { return false }
-        return label.lowercased().contains(needle)
+        return store.ports.filter { store.matchesSearch($0, needle: needle) }
     }
 
     private var sections: [PortGrouping.Section] {
