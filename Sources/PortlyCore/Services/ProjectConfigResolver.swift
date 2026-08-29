@@ -18,8 +18,7 @@ public final class ProjectConfigResolver: @unchecked Sendable {
     /// `directory` itself when it isn't in a git repo). Cached by file mtime, so
     /// edits to the file are picked up on the next refresh.
     public func labels(fromDirectory directory: String) -> [Int: String] {
-        let root = GitProjectResolver.findGitDir(startingAt: directory)?.deletingLastPathComponent()
-            ?? URL(fileURLWithPath: directory)
+        let root = GitProjectResolver.projectRoot(fromDirectory: directory)
         let configURL = root.appendingPathComponent(Self.fileName)
 
         let mtime = (try? FileManager.default.attributesOfItem(atPath: configURL.path))?[.modificationDate] as? Date

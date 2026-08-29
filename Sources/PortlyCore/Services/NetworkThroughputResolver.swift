@@ -19,6 +19,9 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
 
     private var process: Process?
     private var latest: [Int32: Throughput] = [:]
+    /// Recent combined (in+out) samples per pid, oldest first, capped for a sparkline.
+    private var history: [Int32: [Double]] = [:]
+    private let historyLimit = 20
 
     // Only touched from the pipe's readabilityHandler, which macOS serializes onto a
     // single dispatch queue per file handle, so these don't need the lock.
@@ -73,6 +76,14 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         return latest[pid]
     }
 
+    /// Oldest-first combined bytes/sec samples for a sparkline, most recent
+    /// `historyLimit` blocks. Empty until at least one non-baseline block has landed.
+    public func history(for pid: Int32) -> [Double] {
+        lock.lock()
+        defer { lock.unlock() }
+        return history[pid] ?? []
+    }
+
     private func consume(_ chunk: String) {
         lineBuffer += chunk
         var lines = lineBuffer.components(separatedBy: "\n")
@@ -106,6 +117,16 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
 
         lock.lock()
         latest = currentBlock
+        for (pid, sample) in currentBlock {
+            var samples = history[pid] ?? []
+            samples.append(sample.bytesInPerSecond + sample.bytesOutPerSecond)
+            if samples.count > historyLimit {
+                samples.removeFirst(samples.count - historyLimit)
+            }
+            history[pid] = samples
+        }
+        let livePids = Set(currentBlock.keys)
+        history = history.filter { livePids.contains($0.key) }
         lock.unlock()
     }
 }

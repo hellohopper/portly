@@ -3,6 +3,7 @@ import Foundation
 /// Parsed CLI invocation, separated from main.swift so it can be unit tested.
 enum CLICommand: Equatable {
     case list(json: Bool)
+    case watch
     case kill(port: Int)
     case version
     case help
@@ -16,6 +17,8 @@ enum CLICommand: Equatable {
             if rest.isEmpty { return .list(json: false) }
             if rest == ["--json"] { return .list(json: true) }
             return nil
+        case "watch":
+            return arguments.count == 1 ? .watch : nil
         case "kill":
             guard arguments.count == 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
             return .kill(port: port)
@@ -36,6 +39,7 @@ enum CLICommand: Equatable {
     COMMANDS:
       list             Show listening ports (default)
       list --json      Machine-readable JSON output
+      watch            Re-render the port table every 2s until interrupted (Ctrl+C)
       kill <port>      SIGTERM the process listening on <port>
       version          Print the version
       help             Show this help

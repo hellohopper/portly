@@ -16,6 +16,10 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
     public var workingDirectory: String?
     public var bytesInPerSecond: Double?
     public var bytesOutPerSecond: Double?
+    /// Recent combined (in+out) bytes/sec samples, oldest first, for a sparkline.
+    public var throughputHistory: [Double] = []
+    /// The Docker container forwarding this port, when resolvable via `docker ps`.
+    public var dockerContainerName: String?
     /// Ancestor processes (leaf-side first, boundary-limited), e.g. npm wrapping node.
     public var ancestry: [ProcessTreeResolver.Entry] = []
 
@@ -42,7 +46,8 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
             frameworkLabel,
             projectName,
             gitBranch,
-            isDockerManaged ? "docker" : nil
+            isDockerManaged ? "docker" : nil,
+            dockerContainerName
         ]
         return haystacks.contains { $0?.lowercased().contains(needle) == true }
     }

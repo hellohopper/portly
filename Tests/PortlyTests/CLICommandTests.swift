@@ -16,6 +16,14 @@ struct CLICommandTests {
         #expect(CLICommand.parse(["list", "--verbose"]) == nil)
     }
 
+    @Test func parsesWatch() {
+        #expect(CLICommand.parse(["watch"]) == .watch)
+    }
+
+    @Test func rejectsWatchWithExtraArguments() {
+        #expect(CLICommand.parse(["watch", "--json"]) == nil)
+    }
+
     @Test func parsesKillWithValidPort() {
         #expect(CLICommand.parse(["kill", "3000"]) == .kill(port: 3000))
     }

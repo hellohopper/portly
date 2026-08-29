@@ -11,6 +11,7 @@ struct SettingsView: View {
     @State private var hotkeyModifiers = HotkeyManager.storedModifiers
     @State private var newIgnoreText = ""
     @State private var suggestedFreePort: Int?
+    @State private var exportedConfigMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -60,6 +61,37 @@ struct SettingsView: View {
             Text("Picks an unused port from the common 3000/5000/8000 dev ranges.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+
+            Divider()
+
+            Text("Export .portly.json")
+                .font(.subheadline.bold())
+            let exportable = store.exportableProjects()
+            if exportable.isEmpty {
+                Text("No manually labeled ports from a git project to export.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(exportable) { project in
+                    HStack {
+                        Text(project.name)
+                            .font(.caption)
+                        Spacer()
+                        Button("Export") {
+                            if let url = store.exportProjectConfig(project) {
+                                exportedConfigMessage = "Saved \(url.path)"
+                            } else {
+                                exportedConfigMessage = "Couldn't write \(project.name)/.portly.json"
+                            }
+                        }
+                    }
+                }
+                if let exportedConfigMessage {
+                    Text(exportedConfigMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             Divider()
 
