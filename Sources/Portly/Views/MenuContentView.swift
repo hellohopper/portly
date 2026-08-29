@@ -8,10 +8,13 @@ struct MenuContentView: View {
     @AppStorage("appTheme") private var themeRawValue: String = AppTheme.system.rawValue
     @State private var searchText: String = ""
     @State private var isSelecting: Bool = false
-    @State private var selectedPorts: Set<Int> = []
+    /// Row identities (`PortInfo.id`, i.e. pid+port), not port numbers: two processes
+    /// can listen on the same port on different local addresses, and keying these off
+    /// the number alone made selecting or focusing one row act on the other.
+    @State private var selectedRows: Set<String> = []
     @State private var isSettingsPresented: Bool = false
     @State private var isHistoryPresented: Bool = false
-    @State private var focusedPort: Int?
+    @State private var focusedRowID: String?
     @State private var keyMonitor: Any?
     @State private var hostWindow: NSWindow?
     @FocusState private var isSearchFocused: Bool
@@ -21,15 +24,17 @@ struct MenuContentView: View {
     }
 
     private var filteredPorts: [PortInfo] {
-        store.ports.filter { matchesSearch($0) }
+        // Normalise the needle once per filter pass rather than once per row.
+        let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !needle.isEmpty else { return store.ports }
+        return store.ports.filter { matchesSearch($0, needle: needle) }
     }
 
-    private func matchesSearch(_ info: PortInfo) -> Bool {
-        if info.matches(query: searchText) { return true }
+    private func matchesSearch(_ info: PortInfo, needle: String) -> Bool {
+        if info.matches(query: needle) { return true }
         // Labels (manual or .portly.json) live in the store keyed by port, not on
         // PortInfo, so they need their own check to be searchable.
-        let needle = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !needle.isEmpty, let label = store.effectiveLabel(for: info.port) else { return false }
+        guard let label = store.effectiveLabel(for: info.port) else { return false }
         return label.lowercased().contains(needle)
     }
 
@@ -74,14 +79,14 @@ struct MenuContentView: View {
                                         info: port,
                                         isPinned: store.pinnedPorts.contains(port.port),
                                         isSelecting: isSelecting,
-                                        isSelected: selectedPorts.contains(port.port),
-                                        isFocused: focusedPort == port.port,
+                                        isSelected: selectedRows.contains(port.id),
+                                        isFocused: focusedRowID == port.id,
                                         label: store.effectiveLabel(for: port.port),
                                         healthStatus: store.healthStatuses[port.port],
                                         onKill: { store.kill(port) },
                                         onKillTree: { store.killTree(port) },
                                         onTogglePin: { store.togglePin(port.port) },
-                                        onToggleSelect: { toggleSelection(port.port) },
+                                        onToggleSelect: { toggleSelection(port.id) },
                                         onRestart: { store.restart(port) },
                                         onIgnore: { store.ignoreProcessName(port.processName) },
                                         onSetLabel: { store.setLabel($0, for: port.port) },
@@ -94,19 +99,18 @@ struct MenuContentView: View {
                             }
                         }
                         .frame(maxHeight: 420)
-                        .onChange(of: focusedPort) { newValue in
-                            guard let newValue,
-                                  let row = filteredPorts.first(where: { $0.port == newValue }) else { return }
-                            withAnimation { proxy.scrollTo(row.id) }
+                        .onChange(of: focusedRowID) { newValue in
+                            guard let newValue else { return }
+                            withAnimation { proxy.scrollTo(newValue) }
                         }
                     }
                 }
             }
 
-            if isSelecting && !selectedPorts.isEmpty {
+            if isSelecting && !selectedRows.isEmpty {
                 HStack {
                     Button(role: .destructive, action: killSelected) {
-                        Text("Kill \(selectedPorts.count) selected")
+                        Text("Kill \(selectedRows.count) selected")
                     }
                     Spacer()
                     Button("Cancel") { exitSelectionMode() }
@@ -177,17 +181,19 @@ struct MenuContentView: View {
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard event.window === hostWindow else { return false }
 
-        let visiblePorts = sections.flatMap(\.ports).map(\.port)
+        // `sections` re-filters and re-groups the whole list; compute it once per
+        // keystroke rather than once per branch.
+        let visibleRows = sections.flatMap(\.ports).map(\.id)
 
         switch event.keyCode {
         case 125: // down arrow
-            focusedPort = KeyboardNavigator.move(from: focusedPort, in: visiblePorts, direction: .down)
+            focusedRowID = KeyboardNavigator.move(from: focusedRowID, in: visibleRows, direction: .down)
             return true
         case 126: // up arrow
-            focusedPort = KeyboardNavigator.move(from: focusedPort, in: visiblePorts, direction: .up)
+            focusedRowID = KeyboardNavigator.move(from: focusedRowID, in: visibleRows, direction: .up)
             return true
         case 36, 76: // return / keypad enter
-            guard let focused = focusedRow(), focused.proto.contains("TCP"),
+            guard let focused = focusedRow(), focused.isTCP,
                   let url = URL(string: "http://localhost:\(focused.port)") else { return false }
             NSWorkspace.shared.open(url)
             return true
@@ -205,29 +211,29 @@ struct MenuContentView: View {
     }
 
     private func focusedRow() -> PortInfo? {
-        guard let focusedPort else { return nil }
-        return filteredPorts.first { $0.port == focusedPort }
+        guard let focusedRowID else { return nil }
+        return filteredPorts.first { $0.id == focusedRowID }
     }
 
-    private func toggleSelection(_ port: Int) {
-        if selectedPorts.contains(port) {
-            selectedPorts.remove(port)
+    private func toggleSelection(_ rowID: String) {
+        if selectedRows.contains(rowID) {
+            selectedRows.remove(rowID)
         } else {
-            selectedPorts.insert(port)
+            selectedRows.insert(rowID)
         }
     }
 
     private func killSelected() {
         // Kill from the full port list, not the filtered view -- the button's count
         // includes every selected row, even ones a later search has hidden.
-        let toKill = store.ports.filter { selectedPorts.contains($0.port) }
+        let toKill = store.ports.filter { selectedRows.contains($0.id) }
         store.kill(toKill)
         exitSelectionMode()
     }
 
     private func exitSelectionMode() {
         isSelecting = false
-        selectedPorts.removeAll()
+        selectedRows.removeAll()
     }
 
     private func updateBanner(_ update: UpdateChecker.UpdateInfo) -> some View {

@@ -8,21 +8,25 @@ public enum KeyboardNavigator {
         case up
     }
 
-    /// Returns the port that should be focused after moving from `current`.
+    /// Returns the row that should be focused after moving from `current`.
     /// No focus yet: ↓ starts at the top, ↑ starts at the bottom. Movement clamps
-    /// at the ends rather than wrapping. A focused port that vanished (killed,
+    /// at the ends rather than wrapping. A focused row that vanished (killed,
     /// filtered out) restarts as if nothing was focused.
-    public static func move(from current: Int?, in visiblePorts: [Int], direction: Direction) -> Int? {
-        guard !visiblePorts.isEmpty else { return nil }
-        guard let current, let index = visiblePorts.firstIndex(of: current) else {
-            return direction == .down ? visiblePorts.first : visiblePorts.last
+    ///
+    /// Generic over the row identifier because two processes can listen on the same
+    /// port number (on different local addresses), so a port number does not identify
+    /// a row -- moving and acting have to work in terms of `PortInfo.id`.
+    public static func move<ID: Equatable>(from current: ID?, in visibleRows: [ID], direction: Direction) -> ID? {
+        guard !visibleRows.isEmpty else { return nil }
+        guard let current, let index = visibleRows.firstIndex(of: current) else {
+            return direction == .down ? visibleRows.first : visibleRows.last
         }
 
         switch direction {
         case .down:
-            return visiblePorts[min(index + 1, visiblePorts.count - 1)]
+            return visibleRows[min(index + 1, visibleRows.count - 1)]
         case .up:
-            return visiblePorts[max(index - 1, 0)]
+            return visibleRows[max(index - 1, 0)]
         }
     }
 }
