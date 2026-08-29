@@ -20,4 +20,20 @@ struct DockerContainerResolverTests {
         #expect(DockerContainerResolver.parse("not a valid line").isEmpty)
         #expect(DockerContainerResolver.parse("").isEmpty)
     }
+
+    @Test func expandsPublishedPortRanges() {
+        let result = DockerContainerResolver.parse("api\t0.0.0.0:8000-8002->8000-8002/tcp")
+        #expect(result[8000] == "api")
+        #expect(result[8001] == "api")
+        #expect(result[8002] == "api")
+    }
+
+    @Test func portRangeHelperHandlesEdgeCases() {
+        #expect(DockerContainerResolver.expandPorts("8000") == [8000])
+        #expect(DockerContainerResolver.expandPorts("8000-8002") == [8000, 8001, 8002])
+        #expect(DockerContainerResolver.expandPorts("8002-8000").isEmpty)
+        #expect(DockerContainerResolver.expandPorts("nonsense").isEmpty)
+        // Guard against a pathological range trying to allocate 65k entries.
+        #expect(DockerContainerResolver.expandPorts("1-65535").isEmpty)
+    }
 }

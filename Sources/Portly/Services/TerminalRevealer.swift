@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import PortlyCore
 
 enum TerminalRevealer {
 
@@ -46,23 +47,7 @@ enum TerminalRevealer {
     }
 
     private static func resolveTTY(pid: Int32) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-o", "tty=", "-p", "\(pid)"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            return nil
-        }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return nil }
+        guard let output = Shell.run("/bin/ps", ["-o", "tty=", "-p", "\(pid)"]) else { return nil }
 
         let tty = output.trimmingCharacters(in: .whitespacesAndNewlines)
         return (tty.isEmpty || tty == "??") ? nil : tty

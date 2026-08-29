@@ -6,6 +6,14 @@ public enum GitProjectResolver {
     /// and returns (projectName, branchName). Returns nil fields when not applicable.
     public static func resolve(pid: Int32) -> (projectName: String?, gitBranch: String?) {
         guard let cwd = currentWorkingDirectory(of: pid) else { return (nil, nil) }
+        return resolve(workingDirectory: cwd)
+    }
+
+    /// Everything `resolve(pid:)` does once the cwd is known. Callers that need the
+    /// cwd too should resolve it once and use this -- the pid-based entry point used
+    /// to be paired with a second `workingDirectory(of:)` call, spawning `lsof` twice
+    /// for the same process.
+    public static func resolve(workingDirectory cwd: String) -> (projectName: String?, gitBranch: String?) {
         guard let gitDir = findGitDir(startingAt: cwd) else {
             // Daemons run from "/" -- a bare slash is not a meaningful project name.
             let name = URL(fileURLWithPath: cwd).lastPathComponent
@@ -31,23 +39,9 @@ public enum GitProjectResolver {
     }
 
     private static func currentWorkingDirectory(of pid: Int32) -> String? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        process.arguments = ["-a", "-p", "\(pid)", "-d", "cwd", "-Fn"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
+        guard let output = Shell.run("/usr/sbin/lsof", ["-aw", "-p", "\(pid)", "-d", "cwd", "-Fn"]) else {
             return nil
         }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return nil }
 
         for line in output.split(separator: "\n") where line.hasPrefix("n") {
             return String(line.dropFirst())

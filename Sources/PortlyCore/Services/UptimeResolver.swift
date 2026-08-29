@@ -7,23 +7,7 @@ public enum UptimeResolver {
         guard !pids.isEmpty else { return [:] }
 
         let pidList = pids.map(String.init).joined(separator: ",")
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-o", "pid=,etime=", "-p", pidList]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            return [:]
-        }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return [:] }
+        guard let output = Shell.run("/bin/ps", ["-o", "pid=,etime=", "-p", pidList]) else { return [:] }
 
         var result: [Int32: Int] = [:]
         for line in output.split(separator: "\n") {

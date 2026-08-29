@@ -12,6 +12,9 @@ struct SettingsView: View {
     @State private var newIgnoreText = ""
     @State private var suggestedFreePort: Int?
     @State private var exportedConfigMessage: String?
+    /// Resolved when the panel appears rather than inside `body`: building it walks the
+    /// filesystem looking for git roots, and `body` re-runs on every 2s port refresh.
+    @State private var exportable: [PortStore.ExportableProject] = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -81,7 +84,6 @@ struct SettingsView: View {
 
             Text("Export .portly.json")
                 .font(.subheadline.bold())
-            let exportable = store.exportableProjects()
             if exportable.isEmpty {
                 Text("No manually labeled ports from a git project to export.")
                     .font(.caption)
@@ -142,6 +144,7 @@ struct SettingsView: View {
         }
         .padding(16)
         .frame(width: 320)
+        .onAppear { exportable = store.exportableProjects() }
     }
 
     private func export(_ format: PortExporter.Format) {

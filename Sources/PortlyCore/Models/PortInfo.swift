@@ -6,6 +6,9 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
     public var proto: String        // "TCP", "UDP", or "TCP+UDP" once merged
     public let processName: String
     public let commandPath: String?
+    /// The local address the socket is bound to, as reported by lsof: "127.0.0.1",
+    /// "::1", "*" (all interfaces), or a specific interface address.
+    public var bindAddress: String?
     public var projectName: String?
     public var gitBranch: String?
     public var uptimeSeconds: Int?
@@ -33,6 +36,19 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
         DockerDetector.isDockerManaged(processName: processName)
     }
 
+    public var isTCP: Bool {
+        proto.contains("TCP")
+    }
+
+    /// True when the socket is bound to every interface rather than loopback, i.e.
+    /// anyone on the same network can reach it. Dev servers started with `--host`,
+    /// `-b 0.0.0.0`, or published by Docker land here, which on a shared network
+    /// (café, hotel, conference Wi-Fi) means an unauthenticated service is exposed.
+    public var isExposedToNetwork: Bool {
+        guard let bindAddress else { return false }
+        return bindAddress == "*" || bindAddress == "0.0.0.0" || bindAddress == "::"
+    }
+
     /// Case-insensitive substring match against port, process name, framework
     /// label, project name, and git branch -- used to power the search field.
     public func matches(query: String) -> Bool {
@@ -47,7 +63,8 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
             projectName,
             gitBranch,
             isDockerManaged ? "docker" : nil,
-            dockerContainerName
+            dockerContainerName,
+            isExposedToNetwork ? "exposed" : nil
         ]
         return haystacks.contains { $0?.lowercased().contains(needle) == true }
     }

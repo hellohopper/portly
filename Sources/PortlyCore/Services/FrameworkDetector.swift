@@ -8,26 +8,6 @@ public enum FrameworkDetector {
     public static func detect(processName: String, commandLine: String) -> String? {
         let command = commandLine.lowercased()
 
-        // Order matters: check specific dev-tool signatures in a command line
-        // before falling back to the generic runtime name.
-        let signatures: [(String, String)] = [
-            ("vite", "Vite"),
-            ("next dev", "Next.js"),
-            ("next-server", "Next.js"),
-            ("nuxt", "Nuxt"),
-            ("webpack-dev-server", "Webpack"),
-            ("react-scripts", "Create React App"),
-            ("ng serve", "Angular"),
-            ("@angular/cli", "Angular"),
-            ("rails s", "Rails"),
-            ("rails server", "Rails"),
-            ("puma", "Rails"),
-            ("manage.py runserver", "Django"),
-            ("django", "Django"),
-            ("flask", "Flask"),
-            ("uvicorn", "FastAPI"),
-            ("gunicorn", "Gunicorn")
-        ]
         for (signature, label) in signatures where command.contains(signature) {
             return label
         }
@@ -39,7 +19,46 @@ public enum FrameworkDetector {
         case "python", "python3": return "Python"
         case "ruby": return "Ruby"
         case "go": return "Go"
+        case "postgres": return "Postgres"
+        case "redis-server": return "Redis"
+        case "mysqld": return "MySQL"
+        case "mongod": return "MongoDB"
         default: return nil
         }
     }
+
+    /// Order matters: specific dev-tool signatures in a command line are checked
+    /// before falling back to the generic runtime name. Hoisted out of `detect` --
+    /// it's consulted once per port per refresh and never varies.
+    static let signatures: [(String, String)] = [
+        ("vite", "Vite"),
+        ("next dev", "Next.js"),
+        ("next-server", "Next.js"),
+        ("nuxt", "Nuxt"),
+        ("astro", "Astro"),
+        ("svelte-kit", "SvelteKit"),
+        ("sveltekit", "SvelteKit"),
+        ("remix", "Remix"),
+        ("storybook", "Storybook"),
+        ("webpack-dev-server", "Webpack"),
+        ("react-scripts", "Create React App"),
+        ("ng serve", "Angular"),
+        ("@angular/cli", "Angular"),
+        ("http-server", "http-server"),
+        ("rails s", "Rails"),
+        ("rails server", "Rails"),
+        ("puma", "Rails"),
+        ("artisan serve", "Laravel"),
+        ("manage.py runserver", "Django"),
+        ("django", "Django"),
+        ("flask", "Flask"),
+        ("uvicorn", "FastAPI"),
+        ("gunicorn", "Gunicorn"),
+        ("phoenix", "Phoenix"),
+        ("mix phx.server", "Phoenix"),
+        ("spring-boot", "Spring Boot"),
+        ("org.springframework", "Spring Boot"),
+        ("air -c", "Air (Go)"),
+        ("gin-bin", "Gin (Go)")
+    ]
 }

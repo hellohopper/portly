@@ -5,6 +5,29 @@ All notable changes to Portly are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Fixed
+- **Idle auto-kill could SIGTERM every dev server on wake.** Idle time was measured against a wall clock while throughput sampling stops during sleep, so a laptop that slept overnight woke to find every port "idle for 15 hours" and killed them. Idle time is now measured monotonically, and nothing is judged idle while throughput sampling is unavailable
+- **Idle timers were keyed by port number**, so a new process starting on a port a stale one had just vacated inherited its idle clock and could be killed a minute after launch. Keyed on pid+port now
+- **Kill/restart on a Docker-forwarded port hit the wrong process** — `com.docker.backend`, the host-side forwarder shared by every container, rather than the container itself. Those rows now go through `docker stop` / `docker restart`
+- **Every shell-out could deadlock.** `stderr` was piped but never read, so a child that filled the 64KB pipe buffer (e.g. `lsof` warning about unreachable network mounts) blocked forever, freezing the port list permanently. All subprocess calls now drain both pipes and time out
+- **A hung Docker daemon stalled all refreshes**, even with no Docker ports listed — `docker ps` ran unconditionally and without a timeout
+- **nettop dying left the app spinning at 100% CPU** on an EOF loop, with throughput frozen at its last values forever
+- **Toggling the `.localhost` proxy off and on left a dead listener**: the old listener's cancellation cleared the new one's only reference, silently killing the proxy while Settings still reported it healthy
+- **Restart re-ran command lines through `sh -c`**, so arguments containing spaces were re-split, `*` was glob-expanded, and `;`/`&&`/`$` were interpreted. It now execs argv directly
+- The `.localhost` proxy tore down the connection on a client half-close, truncating the response for any client using the standard write-then-`shutdown` pattern
+- Adding to (or removing from) the ignore list no longer fabricates "port closed" history entries and a burst of "new port" notifications
+- Health probes now carry a generation guard, so a slow probe can't overwrite fresher results and re-fire the same failure alert
+- The project/branch cache is validated against process start time, so a reused pid no longer shows a stale project — which sent "open in editor" and restart to the wrong directory
+- "Suggest free port" no longer suggests a port held by an ignored process
+- Two ports can no longer be given the same `.localhost` name (which left the target up to dictionary ordering)
+- "Kill process tree" matches editor/browser helper processes by family, so a chain reaching e.g. `Code Helper (Renderer)` or a non-Terminal emulator no longer SIGTERMs the editor
+- Docker containers publishing a port *range* (`-p 8000-8002:...`) now resolve a container name on every row in the range
+
+### Changed
+- Polling backs off from 2s to 15s while the menu bar panel is closed, and the per-refresh subprocess count dropped from 6 to 4 (one `ps` snapshot now covers uptime, CPU, memory and the process tree; resolving a process's project no longer runs `lsof` twice)
+- Settings no longer walks the filesystem for git roots on every render, and the editor lookup is resolved once instead of per row
+- `FrameworkDetector` recognizes Astro, SvelteKit, Remix, Storybook, Laravel, Phoenix, Spring Boot, Go (Air/Gin), and Postgres/Redis/MySQL/MongoDB
+
 ### Added
 - `.localhost` proxy — name a port from the globe icon on its row and open it as `name.localhost:7777` instead of hunting down the real port number. Off by default; toggle in Settings. Loopback-only, single fixed port, no elevated privileges required
 - Free port suggestion in Settings — picks an unused port from the common 3000/5000/8000 dev ranges based on the current scan
@@ -15,6 +38,9 @@ All notable changes to Portly are documented here. Format loosely follows
 - Export current manual labels as a shareable `.portly.json`, from Settings — merges with (rather than clobbers) whatever the file already has
 - `portly watch` — CLI mode that re-renders the port table every 2s until interrupted
 - Network throughput sparkline next to the CPU/MEM line, showing a recent trend instead of just the instantaneous rate
+- LAN exposure badge — ports bound to all interfaces (rather than loopback) are flagged, and searchable as `exposed`. Also shown as a `BIND` column in the CLI and included in exports
+- `portly wait <port> [--timeout <seconds>]` — blocks until something is listening, for use in scripts (exits 1 on timeout)
+- `portly free` — prints an unused port, for `PORT=$(portly free)`
 - Idle port alerts (off by default) — notifies when a port has seen no network traffic for 30 minutes; an optional, separately-toggled "also auto-kill" mode is available for anyone who wants it
 
 ## [0.5.2] - 2026-07-04

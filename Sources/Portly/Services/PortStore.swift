@@ -8,11 +8,19 @@ final class PortStore: ObservableObject {
     let history = HistoryStore()
 
     @Published private(set) var ports: [PortInfo] = []
+    /// The last scan before the ignore filter -- needed wherever "is this port taken?"
+    /// must reflect reality rather than what the user chose to hide.
+    private(set) var unfilteredPorts: [PortInfo] = []
     @Published private(set) var pinnedPorts: Set<Int> = PortStore.loadPinnedPorts()
     @Published private(set) var availableUpdate: UpdateChecker.UpdateInfo?
 
     private var timer: Timer?
-    private let pollInterval: TimeInterval = 2.0
+    /// The panel is closed the vast majority of the time, and a hidden list doesn't
+    /// need second-by-second freshness -- but notifications and idle tracking still
+    /// need *some* cadence, so back off rather than stopping.
+    private static let visiblePollInterval: TimeInterval = 2.0
+    private static let hiddenPollInterval: TimeInterval = 15.0
+    private var pollInterval: TimeInterval = PortStore.hiddenPollInterval
     private static let pinnedPortsDefaultsKey = "pinnedPorts"
     private var hasCompletedInitialScan = false
     /// Guards against overlapping scans (the 2s timer and user actions like kill/ignore
@@ -22,7 +30,10 @@ final class PortStore: ObservableObject {
 
     /// Git/project context rarely changes for the lifetime of a process, so cache it per pid
     /// instead of re-resolving (which shells out to lsof + reads files) on every poll.
-    private var projectContextCache: [Int32: (projectName: String?, gitBranch: String?, workingDirectory: String?)] = [:]
+    private var projectContextCache: [Int32: ProjectContext] = [:]
+    /// Set when a refresh is triggered by an ignore-list edit: the resulting diff is an
+    /// artifact of the filter changing, not of ports actually opening or closing.
+    private var suppressDiffNotificationsOnce = false
 
     @Published var ignoredProcessNames: Set<String> = PortStore.loadIgnoredProcessNames()
     @Published var portLabels: [Int: String] = PortStore.loadPortLabels()
@@ -66,11 +77,30 @@ final class PortStore: ObservableObject {
             startLocalhostProxy()
         }
         refresh()
+        restartTimer()
+    }
+
+    private func restartTimer() {
+        timer?.invalidate()
         timer = Timer.scheduledTimer(withTimeInterval: pollInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.refresh()
             }
         }
+    }
+
+    /// Called when the menu bar panel opens or closes.
+    func setPanelVisible(_ isVisible: Bool) {
+        let interval = isVisible ? Self.visiblePollInterval : Self.hiddenPollInterval
+        guard interval != pollInterval else { return }
+        pollInterval = interval
+        if isVisible { refresh() }
+        // nettop exits on its own occasionally; opening the panel is a natural point
+        // to notice and bring throughput sampling back.
+        if NetworkThroughputResolver.shared.needsRestart {
+            NetworkThroughputResolver.shared.start()
+        }
+        restartTimer()
     }
 
     func stop() {
@@ -89,15 +119,26 @@ final class PortStore: ObservableObject {
             guard let self else { return }
 
             let uniquePids = Array(Set(scanned.map(\.pid)))
-            let uptimes = UptimeResolver.elapsedSeconds(for: uniquePids)
-            let metrics = ProcessMetricsResolver.metrics(for: uniquePids)
+            // One `ps -axo` covers uptime, %CPU, %MEM and the ancestry table; only the
+            // full command line (whose argv contains spaces) needs its own call.
+            let table = ProcessTable.snapshot()
+            let uptimes = table.uptimeSeconds(for: uniquePids)
+            let metrics = table.metrics(for: uniquePids)
             let commandLines = CommandLineResolver.commandLines(for: uniquePids)
-            let processTable = ProcessTreeResolver.snapshot()
+            let processTable = table.ancestryTable
+
+            // Reading the cache once, rather than hopping to the main actor per port.
+            let contextCache = await MainActor.run { self.projectContextCache }
+            var resolvedContexts = contextCache
 
             var enriched: [PortInfo] = []
             enriched.reserveCapacity(scanned.count)
             for var info in scanned {
-                let context = await self.projectContext(for: info.pid)
+                let context = Self.projectContext(
+                    for: info.pid,
+                    startedAt: table.startTime(of: info.pid),
+                    cache: &resolvedContexts
+                )
                 info.projectName = context.projectName
                 info.gitBranch = context.gitBranch
                 info.workingDirectory = context.workingDirectory
@@ -133,35 +174,45 @@ final class PortStore: ObservableObject {
             }
 
             let allEnriched = enriched
+            let newContexts = resolvedContexts
             await MainActor.run {
                 // A newer refresh already started (and may have already landed its
                 // results) -- applying this older, slower one now would go backwards.
                 guard generation == self.refreshGeneration else { return }
 
+                self.projectContextCache = newContexts
+
                 let finalEnriched = allEnriched.filter {
                     !self.ignoredProcessNames.contains($0.processName.lowercased())
                 }
 
+                // Diff against the *unfiltered* previous list, filtered the same way it
+                // is now: otherwise adding a name to the ignore list reads as "those
+                // ports all closed" (bogus history) and removing it reads as "brand new
+                // ports" (a burst of notifications for servers running for hours).
                 if self.hasCompletedInitialScan {
                     let diff = PortDiffer.diff(old: self.ports, new: finalEnriched, pinned: self.pinnedPorts)
-                    self.history.record(opened: diff.newPorts, closed: diff.closedPorts)
-                    diff.newPorts.forEach(NotificationManager.notifyNewPort)
-                    // A pinned port that vanished because its process was just added to
-                    // the ignore list didn't actually die -- don't alert on those.
-                    let trulyDead = diff.deadPinnedPorts.filter {
-                        !self.ignoredProcessNames.contains($0.processName.lowercased())
-                    }
-                    if !trulyDead.isEmpty {
-                        trulyDead.forEach(NotificationManager.notifyPinnedPortDied)
-                        self.hasAlert = true
+                    if self.suppressDiffNotificationsOnce {
+                        self.suppressDiffNotificationsOnce = false
+                    } else {
+                        self.history.record(opened: diff.newPorts, closed: diff.closedPorts)
+                        diff.newPorts.forEach(NotificationManager.notifyNewPort)
+                        // A pinned port that vanished because its process was just added to
+                        // the ignore list didn't actually die -- don't alert on those.
+                        let trulyDead = diff.deadPinnedPorts.filter {
+                            !self.ignoredProcessNames.contains($0.processName.lowercased())
+                        }
+                        if !trulyDead.isEmpty {
+                            trulyDead.forEach(NotificationManager.notifyPinnedPortDied)
+                            self.hasAlert = true
+                        }
                     }
                 }
                 self.hasCompletedInitialScan = true
 
                 self.ports = finalEnriched
+                self.unfilteredPorts = allEnriched
                 self.projectConfigLabels = finalConfigLabels
-                let livePids = Set(finalEnriched.map(\.pid))
-                self.projectContextCache = self.projectContextCache.filter { livePids.contains($0.key) }
 
                 self.refreshHealthStatuses(for: finalEnriched)
                 self.syncProxyRoutes()
@@ -177,8 +228,7 @@ final class PortStore: ObservableObject {
             guard isIdlePortAlertsEnabled != oldValue else { return }
             UserDefaults.standard.set(isIdlePortAlertsEnabled, forKey: Self.idleAlertsEnabledDefaultsKey)
             if !isIdlePortAlertsEnabled {
-                lastActivePortTimestamps.removeAll()
-                idleNotifiedPorts.removeAll()
+                idleState = IdlePortTracker.Snapshot()
             }
         }
     }
@@ -193,33 +243,21 @@ final class PortStore: ObservableObject {
 
     private static let idleAlertsEnabledDefaultsKey = "idlePortAlertsEnabled"
     private static let idleAutoKillEnabledDefaultsKey = "idlePortAutoKillEnabled"
-    private let idlePortThreshold: TimeInterval = 30 * 60
-    private var lastActivePortTimestamps: [Int: Date] = [:]
-    private var idleNotifiedPorts: Set<Int> = []
+    private let idleTracker = IdlePortTracker()
+    private var idleState = IdlePortTracker.Snapshot()
 
-    /// Notifies (and optionally kills) TCP ports that have shown no measurable
-    /// network throughput for `idlePortThreshold` -- a nudge for the dev server you
-    /// forgot was still running. Notifies at most once per idle stretch; a port that
-    /// sees traffic again is eligible to alert again the next time it goes quiet.
     private func trackIdlePorts(_ ports: [PortInfo]) {
         guard isIdlePortAlertsEnabled else { return }
-        let now = Date()
-        let livePorts = Set(ports.map(\.port))
-        lastActivePortTimestamps = lastActivePortTimestamps.filter { livePorts.contains($0.key) }
-        idleNotifiedPorts.formIntersection(livePorts)
+        let result = idleTracker.advance(
+            ports: ports,
+            // Monotonic, so a sleep/wake cycle can't be mistaken for hours of silence.
+            now: ProcessInfo.processInfo.systemUptime,
+            hasThroughputData: NetworkThroughputResolver.shared.hasSamples,
+            state: idleState
+        )
+        idleState = result.state
 
-        for info in ports where info.proto.contains("TCP") {
-            let isActive = (info.bytesInPerSecond ?? 0) + (info.bytesOutPerSecond ?? 0) > 1024
-            if isActive || lastActivePortTimestamps[info.port] == nil {
-                lastActivePortTimestamps[info.port] = now
-                idleNotifiedPorts.remove(info.port)
-                continue
-            }
-            guard !idleNotifiedPorts.contains(info.port) else { continue }
-            guard let lastActive = lastActivePortTimestamps[info.port],
-                  now.timeIntervalSince(lastActive) >= idlePortThreshold else { continue }
-
-            idleNotifiedPorts.insert(info.port)
+        for info in result.idle {
             if isIdlePortAutoKillEnabled {
                 NotificationManager.notifyIdlePortKilled(info)
                 kill(info)
@@ -233,27 +271,28 @@ final class PortStore: ObservableObject {
         UserDefaults.standard.object(forKey: key) as? Bool ?? false
     }
 
+    /// Probes run concurrently with the 2s poll, so without a generation guard a slow
+    /// probe can resume after a newer one and overwrite fresher results -- which then
+    /// re-fires the same regression alert on the next comparison.
+    private var healthGeneration = 0
+
     private func refreshHealthStatuses(for ports: [PortInfo]) {
-        let tcpPorts = ports.filter { $0.proto.contains("TCP") }.map(\.port)
+        let tcpPorts = ports.filter(\.isTCP).map(\.port)
+        healthGeneration += 1
+        let generation = healthGeneration
         Task {
             let newStatuses = await HealthChecker.shared.statuses(for: tcpPorts)
-            notifyHealthRegressions(old: healthStatuses, new: newStatuses, ports: ports)
-            healthStatuses = newStatuses
-        }
-    }
+            guard generation == healthGeneration else { return }
 
-    /// Notifies when a *pinned* port's HTTP status crosses into 5xx -- scoped to
-    /// pinned ports (like the "pinned port died" alert) so a dev server's normal
-    /// 404s on unrelated routes don't turn this into noise.
-    private func notifyHealthRegressions(old: [Int: Int], new: [Int: Int], ports: [PortInfo]) {
-        for (port, newStatus) in new {
-            guard pinnedPorts.contains(port) else { continue }
-            // No prior reading yet -- nothing to regress from.
-            guard let oldStatus = old[port] else { continue }
-            guard HealthChecker.Category.classify(statusCode: oldStatus) != .failing,
-                  HealthChecker.Category.classify(statusCode: newStatus) == .failing else { continue }
-            guard let info = ports.first(where: { $0.port == port }) else { continue }
-            NotificationManager.notifyHealthRegression(info, statusCode: newStatus)
+            let regressed = HealthRegressionDetector.regressions(
+                old: healthStatuses, new: newStatuses, pinned: pinnedPorts
+            )
+            healthStatuses = newStatuses
+            for port in regressed {
+                guard let info = ports.first(where: { $0.port == port }),
+                      let status = newStatuses[port] else { continue }
+                NotificationManager.notifyHealthRegression(info, statusCode: status)
+            }
         }
     }
 
@@ -262,9 +301,11 @@ final class PortStore: ObservableObject {
     }
 
     /// A port from the common dev-server ranges (3000s/5000s/8000s) that nothing is
-    /// currently listening on, per the latest scan.
+    /// currently listening on. Excludes ports held by *ignored* processes too --
+    /// `ports` is the filtered list, so suggesting from it alone would happily hand
+    /// back a port that a hidden process (commonly a Docker forward) already owns.
     func suggestFreePort() -> Int? {
-        FreePortFinder.suggest(excluding: Set(ports.map(\.port)))
+        FreePortFinder.suggest(excluding: Set(unfilteredPorts.map(\.port)))
     }
 
     struct ExportableProject: Identifiable {
@@ -318,41 +359,89 @@ final class PortStore: ObservableObject {
         searchFocusRequestID = UUID()
     }
 
-    private func projectContext(for pid: Int32) async -> (projectName: String?, gitBranch: String?, workingDirectory: String?) {
-        if let cached = await MainActor.run(body: { projectContextCache[pid] }) {
+    /// Resolves a process's project context, memoised for the lifetime of that
+    /// process. The cache is validated against the process's *start time* as well as
+    /// its pid: after pid reuse the number alone would hand a brand new process the
+    /// dead one's project, branch, and working directory -- which would then send
+    /// "open in editor" and quick-restart to the wrong repository.
+    nonisolated private static func projectContext(
+        for pid: Int32,
+        startedAt: TimeInterval?,
+        cache: inout [Int32: ProjectContext]
+    ) -> ProjectContext {
+        // `ps` reports elapsed time in whole seconds, so the derived start time can
+        // wobble by a second between snapshots for the same process.
+        if let cached = cache[pid], Self.isSameProcess(cached.startTime, startedAt) {
             return cached
         }
-        let resolved = GitProjectResolver.resolve(pid: pid)
+        // One lsof for the cwd, then pure filesystem reads from there -- resolving the
+        // pid twice used to spawn lsof once per call.
         let workingDirectory = GitProjectResolver.workingDirectory(of: pid)
-        let combined = (resolved.projectName, resolved.gitBranch, workingDirectory)
-        await MainActor.run { projectContextCache[pid] = combined }
-        return combined
+        let resolved = workingDirectory.map(GitProjectResolver.resolve(workingDirectory:))
+        let context = ProjectContext(
+            projectName: resolved?.projectName,
+            gitBranch: resolved?.gitBranch,
+            workingDirectory: workingDirectory,
+            startTime: startedAt
+        )
+        cache[pid] = context
+        return context
+    }
+
+    nonisolated private static func isSameProcess(_ cached: TimeInterval?, _ current: TimeInterval?) -> Bool {
+        guard let cached, let current else { return cached == nil && current == nil }
+        return abs(cached - current) <= 2
+    }
+
+    struct ProjectContext {
+        let projectName: String?
+        let gitBranch: String?
+        let workingDirectory: String?
+        /// Seconds-since-boot at which the process started, as of caching. A pid whose
+        /// start time has moved is a *different* process that happens to reuse the number.
+        let startTime: TimeInterval?
     }
 
     func kill(_ info: PortInfo) {
-        Darwin.kill(info.pid, SIGTERM)
-        // Give the process a moment to exit, then refresh.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.refresh()
-        }
+        kill([info])
     }
 
     func kill(_ infos: [PortInfo]) {
-        for info in infos {
-            Darwin.kill(info.pid, SIGTERM)
+        // A Docker-forwarded port's pid is `com.docker.backend`, the host-side
+        // forwarder shared by *every* container -- SIGTERMing it would either do
+        // nothing visible or take down all Docker port forwarding, never the one
+        // container the user meant. Route those through the daemon instead.
+        let (containerised, native) = infos.reduce(into: ([String](), [PortInfo]())) { result, info in
+            if info.isDockerManaged, let name = info.dockerContainerName {
+                result.0.append(name)
+            } else {
+                result.1.append(info)
+            }
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
-            self?.refresh()
+
+        terminate(native.map(\.pid))
+
+        guard !containerised.isEmpty else { return }
+        Task {
+            for name in Set(containerised) {
+                _ = await DockerContainerResolver.shared.stop(containerName: name)
+            }
+            refresh()
         }
     }
 
     /// Kills the process together with its wrapper ancestors (e.g. the `npm run dev`
     /// that spawned the `node` server), outermost first so nothing respawns the leaf.
     func killTree(_ info: PortInfo) {
-        for entry in info.ancestry.reversed() {
-            Darwin.kill(entry.pid, SIGTERM)
+        terminate(info.ancestry.reversed().map(\.pid) + [info.pid])
+    }
+
+    private func terminate(_ pids: [Int32]) {
+        guard !pids.isEmpty else { return }
+        for pid in pids {
+            Darwin.kill(pid, SIGTERM)
         }
-        Darwin.kill(info.pid, SIGTERM)
+        // Give the processes a moment to exit, then refresh.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.refresh()
         }
@@ -361,13 +450,36 @@ final class PortStore: ObservableObject {
     /// Kills the process and relaunches its exact command line in the same working
     /// directory. Useful for bouncing a dev server without retyping the run command.
     func restart(_ info: PortInfo) {
+        if info.isDockerManaged, let containerName = info.dockerContainerName {
+            Task {
+                _ = await DockerContainerResolver.shared.restart(containerName: containerName)
+                refresh()
+            }
+            return
+        }
+
         guard let commandLine = info.commandLine else { return }
+        // `ps -o command=` joins argv with spaces and no quoting, so handing it to
+        // `sh -c` would re-split arguments that contained spaces, glob-expand `*`, and
+        // interpret `;`/`&&`/`$`. Exec the argv directly instead: worst case an
+        // argument that genuinely contained a space stays split, which is far better
+        // than the shell running something the user never typed.
+        let argv = commandLine.split(separator: " ").map(String.init)
+        guard let executable = argv.first else { return }
         let workingDirectory = info.workingDirectory
+
         Darwin.kill(info.pid, SIGTERM)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
             let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/bin/sh")
-            process.arguments = ["-c", commandLine]
+            if executable.hasPrefix("/") {
+                process.executableURL = URL(fileURLWithPath: executable)
+                process.arguments = Array(argv.dropFirst())
+            } else {
+                // A bare name (e.g. "node") needs PATH resolution, which Process
+                // doesn't do; env does, without involving a shell.
+                process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+                process.arguments = argv
+            }
             if let workingDirectory {
                 process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
             }
@@ -379,12 +491,16 @@ final class PortStore: ObservableObject {
     func ignoreProcessName(_ processName: String) {
         ignoredProcessNames.insert(processName.lowercased())
         UserDefaults.standard.set(Array(ignoredProcessNames), forKey: Self.ignoredProcessNamesDefaultsKey)
+        // The ports about to disappear from the list are being hidden, not closed.
+        suppressDiffNotificationsOnce = true
         refresh()
     }
 
     func unignoreProcessName(_ processName: String) {
         ignoredProcessNames.remove(processName.lowercased())
         UserDefaults.standard.set(Array(ignoredProcessNames), forKey: Self.ignoredProcessNamesDefaultsKey)
+        // Likewise: these have been running all along, they were just filtered out.
+        suppressDiffNotificationsOnce = true
         refresh()
     }
 
@@ -412,16 +528,25 @@ final class PortStore: ObservableObject {
         })
     }
 
+    enum ProxyNameError: Equatable {
+        case invalid
+        case alreadyUsed(port: Int)
+    }
+
     /// Sets (or, if `name` is empty, clears) the `.localhost` proxy name for a port.
-    /// Rejects anything that isn't a valid DNS label rather than silently mangling it,
-    /// so the caller can tell the user why their input didn't take.
+    /// Rejects anything that isn't a valid DNS label, and anything already claimed by
+    /// another port -- two ports sharing a name would leave which server
+    /// `name.localhost` reaches down to dictionary ordering, flipping between refreshes.
     @discardableResult
-    func setProxyName(_ name: String, for port: Int) -> Bool {
+    func setProxyName(_ name: String, for port: Int) -> ProxyNameError? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if trimmed.isEmpty {
             proxyNames.removeValue(forKey: port)
         } else {
-            guard LocalhostProxyServer.isValidName(trimmed) else { return false }
+            guard LocalhostProxyServer.isValidName(trimmed) else { return .invalid }
+            if let conflicting = proxyNames.first(where: { $0.value == trimmed && $0.key != port }) {
+                return .alreadyUsed(port: conflicting.key)
+            }
             proxyNames[port] = trimmed
         }
         UserDefaults.standard.set(
@@ -429,7 +554,7 @@ final class PortStore: ObservableObject {
             forKey: Self.proxyNamesDefaultsKey
         )
         syncProxyRoutes()
-        return true
+        return nil
     }
 
     private static func loadProxyNames() -> [Int: String] {

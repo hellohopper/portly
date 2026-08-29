@@ -14,28 +14,27 @@ public enum ProcessTreeResolver {
     static let boundaryNames: Set<String> = [
         "launchd", "login", "sh", "bash", "zsh", "fish", "tcsh", "csh", "dash",
         "Terminal", "iTerm2", "tmux", "screen",
-        "Code Helper", "Code Helper (Plugin)", "Electron", "Cursor Helper (Plugin)", "node_helper"
+        "Ghostty", "WezTerm", "wezterm-gui", "Alacritty", "kitty", "Warp", "Hyper", "Rio",
+        "Electron", "node_helper"
     ]
+
+    /// Editor/browser helper processes come in families ("Code Helper (Renderer)",
+    /// "Cursor Helper (GPU)"...) that an exact-name set can't keep up with -- and
+    /// missing one means "kill process tree" SIGTERMs the user's editor. Match the
+    /// family by prefix instead.
+    static let boundaryPrefixes: [String] = [
+        "Code Helper", "Cursor Helper", "Electron Helper", "Chrome Helper",
+        "Google Chrome Helper", "Firefox", "Safari"
+    ]
+
+    static func isBoundary(_ name: String) -> Bool {
+        if boundaryNames.contains(name) { return true }
+        return boundaryPrefixes.contains { name.hasPrefix($0) }
+    }
 
     /// Builds a pid -> (ppid, executable name) table from one `ps` call.
     public static func snapshot() -> [Int32: (ppid: Int32, name: String)] {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/ps")
-        process.arguments = ["-axo", "pid=,ppid=,comm="]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = Pipe()
-
-        do {
-            try process.run()
-        } catch {
-            return [:]
-        }
-
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        guard let output = String(data: data, encoding: .utf8) else { return [:] }
+        guard let output = Shell.run("/bin/ps", ["-axo", "pid=,ppid=,comm="]) else { return [:] }
         return parseTable(output)
     }
 
@@ -62,7 +61,7 @@ public enum ProcessTreeResolver {
         while chain.count < 6 {
             guard let node = table[current], node.ppid > 1, !visited.contains(node.ppid) else { break }
             guard let parent = table[node.ppid] else { break }
-            if boundaryNames.contains(parent.name) { break }
+            if isBoundary(parent.name) { break }
             chain.append(Entry(pid: node.ppid, name: parent.name))
             visited.insert(node.ppid)
             current = node.ppid

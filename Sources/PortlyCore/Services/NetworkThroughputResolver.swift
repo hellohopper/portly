@@ -18,6 +18,9 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
     private let lock = NSLock()
 
     private var process: Process?
+    /// Retained so the readability handler can be detached on teardown -- otherwise it
+    /// keeps firing against a dead process.
+    private var readHandle: FileHandle?
     private var latest: [Int32: Throughput] = [:]
     /// Recent combined (in+out) samples per pid, oldest first, capped for a sparkline.
     private var history: [Int32: [Double]] = [:]
@@ -50,24 +53,73 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
 
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+            // Empty data means EOF: nettop exited or was killed. Foundation would
+            // otherwise keep re-invoking this handler in a tight loop, burning a core
+            // for the rest of the app's lifetime -- so tear down and allow a respawn.
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                self?.handleUnexpectedExit()
+                return
+            }
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
             self?.consume(chunk)
         }
 
         do {
             try task.run()
             process = task
+            readHandle = pipe.fileHandleForReading
         } catch {
             process = nil
+            readHandle = nil
         }
     }
 
     public func stop() {
         lock.lock()
         let taskToStop = process
+        readHandle?.readabilityHandler = nil
+        readHandle = nil
         process = nil
+        // A later start() must not treat nettop's cumulative first block as a delta,
+        // and must not resume mid-line from the previous run.
+        isFirstBlock = true
+        lineBuffer = ""
+        currentBlock = [:]
+        latest = [:]
+        history = [:]
         lock.unlock()
         taskToStop?.terminate()
+    }
+
+    /// nettop died on its own. Clear the process handle so the next `start()` can
+    /// respawn it rather than the guard silently keeping throughput frozen forever.
+    private func handleUnexpectedExit() {
+        lock.lock()
+        let taskToStop = process
+        readHandle = nil
+        process = nil
+        isFirstBlock = true
+        lineBuffer = ""
+        currentBlock = [:]
+        lock.unlock()
+        taskToStop?.terminate()
+    }
+
+    /// True when nettop is not currently running, so a supervisor can restart it.
+    public var needsRestart: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return process == nil
+    }
+
+    /// Whether throughput sampling has actually produced a reading yet. Callers that
+    /// infer *inactivity* from a zero rate must check this first: no samples means no
+    /// data, which is not the same as no traffic.
+    public var hasSamples: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return !latest.isEmpty
     }
 
     public func throughput(for pid: Int32) -> Throughput? {
