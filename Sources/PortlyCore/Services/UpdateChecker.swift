@@ -7,6 +7,9 @@ public enum UpdateChecker {
         /// Direct download URL for the release's Portly.dmg asset, when published.
         /// Powers in-app "download and install"; falls back to opening `url` when nil.
         public let dmgURL: URL?
+        /// Direct download URL for the release's Portly.dmg.sha256 asset, when published.
+        /// Used to verify the downloaded DMG before it's mounted and installed.
+        public let sha256URL: URL?
     }
 
     private static let releasesAPIURL = URL(string: "https://api.github.com/repos/hellohopper/portly/releases/latest")!
@@ -27,8 +30,10 @@ public enum UpdateChecker {
         let assets = json["assets"] as? [[String: Any]] ?? []
         let dmgAsset = assets.first { ($0["name"] as? String)?.hasSuffix(".dmg") == true }
         let dmgURL = (dmgAsset?["browser_download_url"] as? String).flatMap(URL.init(string:))
+        let sha256Asset = assets.first { ($0["name"] as? String)?.hasSuffix(".dmg.sha256") == true }
+        let sha256URL = (sha256Asset?["browser_download_url"] as? String).flatMap(URL.init(string:))
 
-        return UpdateInfo(version: latestVersion, url: htmlURL, dmgURL: dmgURL)
+        return UpdateInfo(version: latestVersion, url: htmlURL, dmgURL: dmgURL, sha256URL: sha256URL)
     }
 
     /// Numeric, component-wise comparison (so "0.10.0" correctly beats "0.9.0",

@@ -24,7 +24,11 @@ final class UpdateCoordinator: ObservableObject {
             return
         }
         Task {
-            await AutoUpdater.downloadAndInstall(dmgURL: dmgURL, releasePageURL: update.url) { [weak self] phase in
+            await AutoUpdater.downloadAndInstall(
+                dmgURL: dmgURL,
+                sha256URL: update.sha256URL,
+                releasePageURL: update.url
+            ) { [weak self] phase in
                 self?.phase = phase
             }
         }

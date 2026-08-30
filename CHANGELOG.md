@@ -3,9 +3,10 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.6.0] - 2026-08-29
 
 ### Fixed
+- Auto-updater now verifies the downloaded DMG's SHA-256 against the release's published `.dmg.sha256` before mounting and installing it, rather than installing whatever came back
 - **Idle auto-kill could SIGTERM every dev server on wake.** Idle time was measured against a wall clock while throughput sampling stops during sleep, so a laptop that slept overnight woke to find every port "idle for 15 hours" and killed them. Idle time is now measured monotonically, and nothing is judged idle while throughput sampling is unavailable
 - **Idle timers were keyed by port number**, so a new process starting on a port a stale one had just vacated inherited its idle clock and could be killed a minute after launch. Keyed on pid+port now
 - **Kill/restart on a Docker-forwarded port hit the wrong process** — `com.docker.backend`, the host-side forwarder shared by every container, rather than the container itself. Those rows now go through `docker stop` / `docker restart`
@@ -26,6 +27,8 @@ All notable changes to Portly are documented here. Format loosely follows
 - A port changing hands between two polls (a crash-and-respawn, or a restart completing inside one interval) left no trace at all in port history; it's now recorded as a "replaced" event — still without falsely alerting that a pinned port died
 
 ### Changed
+- The Homebrew cask now declares `auto_updates true`, a macOS Ventura minimum, a fuller `zap` (Application Support, Saved Application State), and quits the app on uninstall
+- Releases now bump `hellohopper/homebrew-portly` automatically (requires the tap repo's `HOMEBREW_TAP_TOKEN` secret)
 - The CLI now shares the app's enrichment pipeline (`PortEnricher`) instead of reimplementing a subset of it, so `portly list` gains Docker container names and process ancestry, and the two can no longer drift apart
 - One `lsof` covers both TCP and UDP, taking the steady-state subprocess count per refresh from 4 to 3
 - A process's working directory now comes from `proc_pidinfo` rather than an `lsof` call per newly-seen pid — the last place where subprocess count grew with the number of listening ports
@@ -36,6 +39,10 @@ All notable changes to Portly are documented here. Format loosely follows
 - `FrameworkDetector` recognizes Astro, SvelteKit, Remix, Storybook, Laravel, Phoenix, Spring Boot, Go (Air/Gin), and Postgres/Redis/MySQL/MongoDB
 
 ### Added
+- Database health badge — Postgres, Redis, MySQL, and MongoDB ports get a raw TCP-handshake probe (`TCP` badge) instead of a permanent failing HTTP badge
+- "Reveal owning terminal" now recognizes iTerm2 (selects the exact tab/session, like Terminal.app) and activates Warp, Ghostty, WezTerm, Alacritty, kitty, Hyper, or Rio when one of those owns the process
+- `portly run -- <cmd>` — runs a dev server with `$PORT` set to a free port, falling back automatically if a requested `--port` is already taken
+- `portly completions zsh` / `portly completions fish` — prints a shell completion script for the CLI
 - `.localhost` proxy — name a port from the globe icon on its row and open it as `name.localhost:7777` instead of hunting down the real port number. Off by default; toggle in Settings. Loopback-only, single fixed port, no elevated privileges required
 - Free port suggestion in Settings — picks an unused port from the common 3000/5000/8000 dev ranges based on the current scan
 - Notification when a *pinned* port's HTTP status crosses into 5xx, not just when it stops listening

@@ -57,7 +57,7 @@ struct PortRow: View {
                     Text(verbatim: "\(info.port)")
                         .font(.system(.body, design: .monospaced).bold())
                     if let health {
-                        Text(verbatim: "\(health.statusCode)")
+                        Text(verbatim: health.statusCode.map(String.init) ?? "TCP")
                             .font(.system(.caption2, design: .monospaced).bold())
                             .foregroundStyle(healthColor(for: health.category))
                             .padding(.horizontal, 5)
@@ -342,10 +342,16 @@ struct PortRow: View {
     }
 
     private func healthTooltip(_ health: HealthChecker.Health) -> String {
-        let probed = store.projectConfig.healthTarget(for: info.port)
-        let scheme = probed.useTLS ? "https" : "http"
         let millis = Int((health.latency * 1000).rounded())
-        var text = "HTTP \(health.statusCode) in \(millis)ms from \(scheme)://localhost:\(info.port)\(probed.path)"
+        var text: String
+        switch health.kind {
+        case .http(let statusCode):
+            let probed = store.projectConfig.healthTarget(for: info.port)
+            let scheme = probed.useTLS ? "https" : "http"
+            text = "HTTP \(statusCode) in \(millis)ms from \(scheme)://localhost:\(info.port)\(probed.path)"
+        case .tcp:
+            text = "TCP connection accepted in \(millis)ms"
+        }
         if health.category == .slow {
             text += " — responding, but slowly"
         }

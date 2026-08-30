@@ -275,22 +275,30 @@ final class PortStore: ObservableObject {
             if target != .default { targets[port] = target }
         }
 
+        // Databases and other wire-protocol services never answer HTTP; probe those
+        // with a raw TCP handshake instead of burning the HTTP timeout on them.
+        let tcpOnlyLabels: Set<String> = ["Postgres", "Redis", "MySQL", "MongoDB"]
+        let tcpOnlyPorts = Set(ports.filter { tcpOnlyLabels.contains($0.frameworkLabel ?? "") }.map(\.port))
+
         healthGeneration += 1
         let generation = healthGeneration
         Task {
-            let newResults = await HealthChecker.shared.health(for: tcpPorts, targets: targets)
+            let newResults = await HealthChecker.shared.health(
+                for: tcpPorts, targets: targets, tcpOnlyPorts: tcpOnlyPorts
+            )
             guard generation == healthGeneration else { return }
 
             let regressed = HealthRegressionDetector.regressions(
-                old: healthResults.mapValues(\.statusCode),
-                new: newResults.mapValues(\.statusCode),
+                old: healthResults.compactMapValues(\.statusCode),
+                new: newResults.compactMapValues(\.statusCode),
                 pinned: pinnedPorts
             )
             healthResults = newResults
             for port in regressed {
                 guard let info = ports.first(where: { $0.port == port }),
-                      let result = newResults[port] else { continue }
-                NotificationManager.notifyHealthRegression(info, statusCode: result.statusCode)
+                      let result = newResults[port],
+                      let statusCode = result.statusCode else { continue }
+                NotificationManager.notifyHealthRegression(info, statusCode: statusCode)
             }
         }
     }

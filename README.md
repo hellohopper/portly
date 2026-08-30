@@ -17,7 +17,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Network throughput | Live ↓/↑ bytes-per-second per port, alongside CPU/MEM |
 | Uptime | How long each port has been listening |
 | Kill process | One click, with a confirmation-free `SIGTERM` |
-| Reveal owning terminal | Brings Terminal.app to the front and selects the exact tab running that process |
+| Reveal owning terminal | Brings the owning terminal to the front; selects the exact tab/session in Terminal.app or iTerm2, best-effort activation for Warp/Ghostty/WezTerm/Alacritty/kitty/Hyper/Rio |
 | Open / copy URL | Launch `localhost:<port>` in your browser, or right-click to copy the URL |
 | Theme toggle | System / Light / Dark, persisted across launches |
 | Active-port indicator | Green dot per row |
@@ -26,7 +26,7 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Notifications | Alerted when a new port starts listening, or a pinned port dies |
 | Docker awareness | Flags ports forwarded through Docker Desktop's host process |
 | Bulk actions | Select multiple ports and kill them in one action |
-| Auto-update check | In-app banner when a newer GitHub release is available, with one-click "Download & Install" |
+| Auto-update check | In-app banner when a newer GitHub release is available, with one-click "Download & Install"; the downloaded DMG's SHA-256 is verified against the release's published checksum before it's installed |
 | Launch at Login | Toggle in Settings, backed by `SMAppService` |
 | Menu bar alert state | Icon tints red when a pinned port dies, clears once you open the menu |
 | Ignore list | Right-click a port to hide it (and its process) from the list going forward |
@@ -36,11 +36,14 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Per-port labels | Give any port a custom name (e.g. "staging API") that persists across launches |
 | Copy as curl | Right-click a port for a ready-to-paste `curl` command |
 | HTTP health badge | HEAD-probes each TCP port and shows the status code (green 2xx/3xx, orange 4xx, red 5xx) |
+| Database health badge | Postgres, Redis, MySQL, and MongoDB ports (which never answer HTTP) get a raw TCP-handshake probe instead, showing a `TCP` badge rather than a permanent red one |
 | Process tree | See the wrapper chain (`npm → node`) and kill the whole tree in one action |
 | `.portly.json` | Check in expected port labels at a project's git root, shared with your team |
 | Port history | Rolling log of open/close events with timestamps, persisted across launches |
 | Keyboard navigation | ↑/↓ to move, Enter to open in browser, ⌘⌫ to kill, Esc to clear search |
 | CLI companion | `portly list` / `portly kill 3000` from your terminal — see [CLI](#cli) |
+| `portly run` | Wraps a dev server command, setting `$PORT` to a free port (or your preferred one, falling back if it's taken) so it never fails to start with "address already in use" |
+| Shell completions | `portly completions zsh` / `fish` prints a completion script for the CLI's subcommands |
 | `.localhost` proxy | Give any port a `name.localhost:7777` address (globe icon on its row) so you don't have to remember the port number |
 | Free port suggestion | Settings can suggest an unused port from the common 3000/5000/8000 dev ranges |
 | Failing-pinned-port alerts | Notified when a pinned port's HTTP status crosses into 5xx, not just when it dies |
@@ -95,6 +98,9 @@ portly free         # print an unused port from the common dev ranges
 portly kill 3000    # SIGTERM whatever is listening on port 3000
 portly kill 3000 --tree   # ...along with its wrapper processes (npm → node)
 portly restart 3000 # kill it and relaunch the same command line
+portly run -- npm run dev          # sets $PORT to a free port, then execs the command
+portly run --port 4000 -- node app.js  # prefers 4000, falls back if it's taken
+portly completions zsh > ~/.zsh/completions/_portly  # or `fish` for a fish script
 ```
 
 Homebrew installs the `portly` command automatically. For manual installs, symlink it once:

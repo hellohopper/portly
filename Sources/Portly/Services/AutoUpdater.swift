@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import CryptoKit
 
 /// Downloads a release DMG, mounts it, swaps the running app bundle for the one
 /// inside, then relaunches. Self-replacement only runs when the app is installed
@@ -17,6 +18,7 @@ enum AutoUpdater {
     @MainActor
     static func downloadAndInstall(
         dmgURL: URL,
+        sha256URL: URL?,
         releasePageURL: URL,
         onPhaseChange: @escaping (Phase) -> Void
     ) async {
@@ -27,6 +29,18 @@ enum AutoUpdater {
         }
 
         onPhaseChange(.downloading)
+
+        // Fetch the expected checksum before downloading the (much larger) DMG,
+        // so a broken/missing sha256 asset fails fast rather than after the download.
+        var expectedSHA256: String?
+        if let sha256URL {
+            guard let checksum = await fetchExpectedChecksum(from: sha256URL) else {
+                onPhaseChange(.failed("Could not verify the update's checksum"))
+                return
+            }
+            expectedSHA256 = checksum
+        }
+
         guard let (downloadedURL, response) = try? await URLSession.shared.download(from: dmgURL),
               (response as? HTTPURLResponse)?.statusCode == 200 else {
             onPhaseChange(.failed("Download failed"))
@@ -41,6 +55,13 @@ enum AutoUpdater {
             return
         }
         defer { try? FileManager.default.removeItem(at: dmgPath) }
+
+        if let expectedSHA256 {
+            guard let actualSHA256 = sha256(ofFileAt: dmgPath), actualSHA256 == expectedSHA256 else {
+                onPhaseChange(.failed("Downloaded update failed checksum verification"))
+                return
+            }
+        }
 
         onPhaseChange(.installing)
         let mountPoint = FileManager.default.temporaryDirectory.appendingPathComponent("PortlyUpdateMount-\(UUID().uuidString)")
@@ -83,6 +104,27 @@ enum AutoUpdater {
         }
 
         relaunch(at: destinationApp)
+    }
+
+    /// Parses a `shasum -a 256` style file ("<hex>  Portly.dmg") and returns the hex digest.
+    private static func fetchExpectedChecksum(from url: URL) async -> String? {
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse)?.statusCode == 200,
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        let hex = text.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)
+        guard let hex, hex.count == 64, hex.allSatisfy(\.isHexDigit) else { return nil }
+        return hex.lowercased()
+    }
+
+    private static func sha256(ofFileAt url: URL) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        var hasher = SHA256()
+        while let chunk = try? handle.read(upToCount: 4 * 1024 * 1024), !chunk.isEmpty {
+            hasher.update(data: chunk)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     private static func relaunch(at appURL: URL) {
