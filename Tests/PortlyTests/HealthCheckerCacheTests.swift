@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import Network
 @testable import PortlyCore
 
 struct HealthCheckerCacheTests {
@@ -41,5 +42,56 @@ struct HealthCheckerCacheTests {
         _ = await checker.health(for: [64_998, 64_999])
         let results = await checker.health(for: [64_998])
         #expect(results[64_999] == nil)
+    }
+
+    // MARK: - TCP-only probing (databases and other wire-protocol services)
+
+    @Test func tcpHealthHasNoStatusCodeAndIsHealthyWhenFast() {
+        let health = HealthChecker.Health(kind: .tcp, latency: 0.01)
+        #expect(health.statusCode == nil)
+        #expect(health.category == .healthy)
+    }
+
+    @Test func tcpHealthIsSlowPastTheThreshold() {
+        let health = HealthChecker.Health(kind: .tcp, latency: 5)
+        #expect(health.category == .slow)
+    }
+
+    /// A port declared `tcpOnly` gets a raw TCP handshake probe instead of an HTTP
+    /// request -- proven here against a bare TCP listener that would never answer HTTP.
+    @Test func tcpOnlyPortsAreProbedByHandshakeNotHTTP() async throws {
+        let listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { connection in
+            connection.cancel()
+        }
+        let ready = Ready()
+        listener.stateUpdateHandler = { state in
+            if case .ready = state { ready.signal() }
+        }
+        listener.start(queue: .global())
+        await ready.wait()
+        defer { listener.cancel() }
+
+        let port = Int(listener.port!.rawValue)
+        let checker = HealthChecker(recheckInterval: 60)
+        let results = await checker.health(for: [port], tcpOnlyPorts: [port])
+
+        let health = try #require(results[port])
+        #expect(health.kind == .tcp)
+        #expect(health.statusCode == nil)
+    }
+}
+
+/// Bridges `NWListener`'s callback-based readiness into `async`/`await` for tests.
+private final class Ready: @unchecked Sendable {
+    private let semaphore = DispatchSemaphore(value: 0)
+    func signal() { semaphore.signal() }
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global().async {
+                self.semaphore.wait()
+                continuation.resume()
+            }
+        }
     }
 }

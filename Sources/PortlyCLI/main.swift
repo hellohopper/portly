@@ -89,6 +89,65 @@ func printTable(_ ports: [PortInfo]) {
     }
 }
 
+let zshCompletionScript = """
+#compdef portly
+
+_portly() {
+    local -a commands
+    commands=(
+        'list:Show listening ports'
+        'watch:Re-render the port table every 2s'
+        'wait:Block until a port is listening'
+        'free:Print an unused port from the common dev ranges'
+        'kill:SIGTERM the process listening on a port'
+        'restart:Kill and relaunch it with the same command line'
+        'run:Run a command with $PORT set to a free port'
+        'completions:Print a shell completion script'
+        'version:Print the version'
+        'help:Show help'
+    )
+
+    if (( CURRENT == 2 )); then
+        _describe 'command' commands
+        return
+    fi
+
+    case ${words[2]} in
+        kill|restart|wait)
+            if (( CURRENT == 3 )); then
+                local -a ports
+                ports=(${(f)"$(portly list --json 2>/dev/null | command grep -o '"port":[0-9]*' | command cut -d: -f2)"})
+                _describe 'port' ports
+            fi
+            ;;
+        completions)
+            (( CURRENT == 3 )) && _values 'shell' zsh fish
+            ;;
+        list)
+            (( CURRENT == 3 )) && _values 'option' --json
+            ;;
+    esac
+}
+
+_portly
+"""
+
+let fishCompletionScript = """
+complete -c portly -f
+complete -c portly -n '__fish_use_subcommand' -a list -d 'Show listening ports'
+complete -c portly -n '__fish_use_subcommand' -a watch -d 'Re-render the port table every 2s'
+complete -c portly -n '__fish_use_subcommand' -a wait -d 'Block until a port is listening'
+complete -c portly -n '__fish_use_subcommand' -a free -d 'Print an unused port from the common dev ranges'
+complete -c portly -n '__fish_use_subcommand' -a kill -d 'SIGTERM the process listening on a port'
+complete -c portly -n '__fish_use_subcommand' -a restart -d 'Kill and relaunch it with the same command line'
+complete -c portly -n '__fish_use_subcommand' -a run -d 'Run a command with $PORT set to a free port'
+complete -c portly -n '__fish_use_subcommand' -a completions -d 'Print a shell completion script'
+complete -c portly -n '__fish_use_subcommand' -a version -d 'Print the version'
+complete -c portly -n '__fish_use_subcommand' -a help -d 'Show help'
+complete -c portly -n '__fish_seen_subcommand_from list' -l json -d 'Machine-readable JSON output'
+complete -c portly -n '__fish_seen_subcommand_from completions' -a 'zsh fish'
+"""
+
 func run() -> Int32 {
     guard let command = CLICommand.parse(Array(CommandLine.arguments.dropFirst())) else {
         FileHandle.standardError.write(Data("Unrecognized arguments.\n\n\(CLICommand.usage)\n".utf8))
@@ -175,6 +234,46 @@ func run() -> Int32 {
             return 1
         }
         print("Restarted \(target.processName) on port \(port).")
+        return 0
+
+    case .run(let requestedPort, let command):
+        let used = Set(PortScanner.scan().map(\.port))
+        let port: Int
+        if let requestedPort {
+            if used.contains(requestedPort) {
+                guard let free = FreePortFinder.suggest(excluding: used) else {
+                    FileHandle.standardError.write(Data(
+                        "Port \(requestedPort) is in use and no free port was found in the common dev ranges.\n".utf8
+                    ))
+                    return 1
+                }
+                FileHandle.standardError.write(Data("Port \(requestedPort) is already in use — using \(free) instead.\n".utf8))
+                port = free
+            } else {
+                port = requestedPort
+            }
+        } else {
+            guard let free = FreePortFinder.suggest(excluding: used) else {
+                FileHandle.standardError.write(Data("No free port found in the common dev ranges.\n".utf8))
+                return 1
+            }
+            port = free
+        }
+
+        setenv("PORT", String(port), 1)
+        FileHandle.standardError.write(Data("PORT=\(port) \(command.joined(separator: " "))\n".utf8))
+
+        // execvp replaces this process outright (PATH search, current environment,
+        // stdio all inherited), so the wrapped command owns the terminal exactly as
+        // if the user had typed it themselves -- Ctrl+C, exit code, and all.
+        var argv: [UnsafeMutablePointer<CChar>?] = command.map { strdup($0) }
+        argv.append(nil)
+        execvp(command[0], &argv)
+        FileHandle.standardError.write(Data("Failed to run \(command[0]): \(String(cString: strerror(errno)))\n".utf8))
+        return 127
+
+    case .completions(let shell):
+        print(shell == .zsh ? zshCompletionScript : fishCompletionScript)
         return 0
 
     case .version:

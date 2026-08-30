@@ -67,4 +67,28 @@ struct CLICommandTests {
     @Test func rejectsUnknownCommand() {
         #expect(CLICommand.parse(["frobnicate"]) == nil)
     }
+
+    @Test func parsesRunWithAndWithoutExplicitPort() {
+        #expect(CLICommand.parse(["run", "--", "npm", "run", "dev"]) == .run(port: nil, command: ["npm", "run", "dev"]))
+        #expect(CLICommand.parse(["run", "--port", "4000", "--", "node", "server.js"])
+                == .run(port: 4000, command: ["node", "server.js"]))
+    }
+
+    @Test func rejectsMalformedRun() {
+        #expect(CLICommand.parse(["run"]) == nil)
+        #expect(CLICommand.parse(["run", "npm", "run", "dev"]) == nil) // missing "--"
+        #expect(CLICommand.parse(["run", "--"]) == nil) // empty command
+        #expect(CLICommand.parse(["run", "--port", "abc", "--", "node"]) == nil)
+        #expect(CLICommand.parse(["run", "--port", "70000", "--", "node"]) == nil)
+    }
+
+    @Test func parsesCompletions() {
+        #expect(CLICommand.parse(["completions", "zsh"]) == .completions(.zsh))
+        #expect(CLICommand.parse(["completions", "fish"]) == .completions(.fish))
+    }
+
+    @Test func rejectsUnknownShellForCompletions() {
+        #expect(CLICommand.parse(["completions", "bash"]) == nil)
+        #expect(CLICommand.parse(["completions"]) == nil)
+    }
 }

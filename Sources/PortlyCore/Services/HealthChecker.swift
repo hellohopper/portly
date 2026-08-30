@@ -1,4 +1,5 @@
 import Foundation
+import Network
 
 /// Probes local ports over HTTP so the UI can show whether a dev server is actually
 /// responding -- and how fast -- not just whether the socket is open.
@@ -30,17 +31,41 @@ public actor HealthChecker {
         public static let slowThreshold: TimeInterval = 1.0
     }
 
+    /// HTTP probes classify by status code; ports that only speak a wire protocol
+    /// (Postgres, Redis, MySQL, MongoDB) can only report whether the socket accepted
+    /// a TCP handshake.
+    public enum Kind: Sendable, Equatable {
+        case http(statusCode: Int)
+        case tcp
+    }
+
     public struct Health: Sendable, Equatable {
-        public let statusCode: Int
+        public let kind: Kind
         public let latency: TimeInterval
 
         public init(statusCode: Int, latency: TimeInterval) {
-            self.statusCode = statusCode
+            self.kind = .http(statusCode: statusCode)
             self.latency = latency
         }
 
+        public init(kind: Kind, latency: TimeInterval) {
+            self.kind = kind
+            self.latency = latency
+        }
+
+        /// nil for a `.tcp` result -- there is no status code, only "it connected".
+        public var statusCode: Int? {
+            guard case .http(let statusCode) = kind else { return nil }
+            return statusCode
+        }
+
         public var category: Category {
-            Category.classify(statusCode: statusCode, latency: latency)
+            switch kind {
+            case .http(let statusCode):
+                return Category.classify(statusCode: statusCode, latency: latency)
+            case .tcp:
+                return latency >= Category.slowThreshold ? .slow : .healthy
+            }
         }
     }
 
@@ -93,7 +118,11 @@ public actor HealthChecker {
     /// Latest known health per port, re-probing any port whose cached result is stale
     /// or whose target changed. Non-HTTP ports (connection refused, handshake
     /// garbage, timeout) yield no entry.
-    public func health(for ports: [Int], targets: [Int: Target] = [:]) async -> [Int: Health] {
+    public func health(
+        for ports: [Int],
+        targets: [Int: Target] = [:],
+        tcpOnlyPorts: Set<Int> = []
+    ) async -> [Int: Health] {
         let timestamp = now()
         let stalePorts = ports.filter { port in
             guard let entry = cache[port] else { return true }
@@ -104,7 +133,11 @@ public actor HealthChecker {
         await withTaskGroup(of: (Int, Health?).self) { group in
             for port in stalePorts {
                 let target = targets[port] ?? .default
-                group.addTask { (port, await self.probe(port: port, target: target)) }
+                if tcpOnlyPorts.contains(port) {
+                    group.addTask { (port, await self.probeTCP(port: port)) }
+                } else {
+                    group.addTask { (port, await self.probe(port: port, target: target)) }
+                }
             }
             for await (port, health) in group {
                 cache[port] = CacheEntry(
@@ -120,9 +153,10 @@ public actor HealthChecker {
         return cache.compactMapValues(\.health)
     }
 
-    /// Back-compatible status-code-only view.
+    /// Back-compatible status-code-only view. TCP-only results (no HTTP status) are
+    /// dropped rather than faked.
     public func statuses(for ports: [Int], targets: [Int: Target] = [:]) async -> [Int: Int] {
-        await health(for: ports, targets: targets).mapValues(\.statusCode)
+        await health(for: ports, targets: targets).compactMapValues(\.statusCode)
     }
 
     private func probe(port: Int, target: Target) async -> Health? {
@@ -146,6 +180,57 @@ public actor HealthChecker {
         guard let (_, response) = try? await session.data(for: getRequest),
               let http = response as? HTTPURLResponse else { return nil }
         return Health(statusCode: http.statusCode, latency: Date().timeIntervalSince(started))
+    }
+
+    /// Raw TCP-handshake probe for ports that don't speak HTTP (Postgres, Redis,
+    /// MySQL, MongoDB, ...). A completed handshake is all "healthy" can mean here --
+    /// there's no status code, and .slow only reflects unusually slow connect time.
+    private func probeTCP(port: Int) async -> Health? {
+        guard let nwPort = NWEndpoint.Port(rawValue: UInt16(port)) else { return nil }
+        let connection = NWConnection(host: "127.0.0.1", port: nwPort, using: .tcp)
+        let started = Date()
+
+        return await withCheckedContinuation { continuation in
+            let box = ResumeOnce(continuation)
+            connection.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    box.resume(Health(kind: .tcp, latency: Date().timeIntervalSince(started)))
+                    connection.cancel()
+                case .failed, .cancelled:
+                    box.resume(nil)
+                default:
+                    break
+                }
+            }
+            connection.start(queue: .global(qos: .utility))
+
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 3.0) {
+                box.resume(nil)
+                connection.cancel()
+            }
+        }
+    }
+}
+
+/// `NWConnection.stateUpdateHandler` can fire from multiple states after the timeout
+/// fallback has already resumed the continuation; guards against the fatal
+/// double-resume that would otherwise cause.
+private final class ResumeOnce<T: Sendable>: @unchecked Sendable {
+    private let continuation: CheckedContinuation<T?, Never>
+    private let lock = NSLock()
+    private var didResume = false
+
+    init(_ continuation: CheckedContinuation<T?, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(_ value: T?) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !didResume else { return }
+        didResume = true
+        continuation.resume(returning: value)
     }
 }
 

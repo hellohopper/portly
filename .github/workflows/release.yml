@@ -43,3 +43,25 @@ jobs:
           append_body: |
 
             **SHA-256**: `${{ steps.checksum.outputs.sha256 }}`
+
+      # Requires a `HOMEBREW_TAP_TOKEN` repo secret: a PAT (classic, `repo` scope,
+      # or fine-grained with contents:write) for hellohopper/homebrew-portly.
+      # Skipped on workflow_dispatch (draft) releases and if the secret isn't set.
+      - name: Bump hellohopper/homebrew-portly
+        if: github.event_name != 'workflow_dispatch' && secrets.HOMEBREW_TAP_TOKEN != ''
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA="${{ steps.checksum.outputs.sha256 }}"
+
+          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/hellohopper/homebrew-portly.git" tap
+          cd tap
+          sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/portly.rb
+          sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/portly.rb
+
+          git config user.name "portly-release-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add Casks/portly.rb
+          git commit -m "Bump Portly to v${VERSION}"
+          git push

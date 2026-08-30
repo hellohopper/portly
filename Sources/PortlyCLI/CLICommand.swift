@@ -8,8 +8,15 @@ enum CLICommand: Equatable {
     case free
     case kill(port: Int, tree: Bool)
     case restart(port: Int)
+    case run(port: Int?, command: [String])
+    case completions(ShellKind)
     case version
     case help
+
+    enum ShellKind: String, Equatable {
+        case zsh
+        case fish
+    }
 
     static let defaultWaitTimeout = 60
 
@@ -42,6 +49,22 @@ enum CLICommand: Equatable {
         case "restart":
             guard arguments.count == 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
             return .restart(port: port)
+        case "run":
+            let rest = Array(arguments.dropFirst())
+            var port: Int?
+            var index = 0
+            if rest.first == "--port" {
+                guard rest.count >= 2, let requested = Int(rest[1]), (1...65535).contains(requested) else { return nil }
+                port = requested
+                index = 2
+            }
+            guard index < rest.count, rest[index] == "--" else { return nil }
+            let command = Array(rest[(index + 1)...])
+            guard !command.isEmpty else { return nil }
+            return .run(port: port, command: command)
+        case "completions":
+            guard arguments.count == 2, let shell = ShellKind(rawValue: arguments[1]) else { return nil }
+            return .completions(shell)
         case "version", "--version", "-v":
             return .version
         case "help", "--help", "-h":
@@ -66,6 +89,11 @@ enum CLICommand: Equatable {
       kill <port>      SIGTERM the process listening on <port>
                        (--tree also kills its wrapper processes, e.g. npm -> node)
       restart <port>   Kill and relaunch it with the same command line
+      run -- <cmd>     Run <cmd> with $PORT set to a free port (avoids "already in
+                       use" errors); --port <n> requests a specific one, falling
+                       back to another free port if <n> is taken
+      completions <shell>
+                       Print a completion script for zsh or fish
       version          Print the version
       help             Show this help
 
