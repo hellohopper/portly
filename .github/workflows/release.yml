@@ -14,6 +14,8 @@ permissions:
 jobs:
   build-and-release:
     runs-on: macos-15
+    env:
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -48,9 +50,7 @@ jobs:
       # or fine-grained with contents:write) for hellohopper/homebrew-portly.
       # Skipped on workflow_dispatch (draft) releases and if the secret isn't set.
       - name: Bump hellohopper/homebrew-portly
-        if: github.event_name != 'workflow_dispatch' && secrets.HOMEBREW_TAP_TOKEN != ''
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        if: github.event_name != 'workflow_dispatch' && env.HOMEBREW_TAP_TOKEN != ''
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           SHA="${{ steps.checksum.outputs.sha256 }}"
