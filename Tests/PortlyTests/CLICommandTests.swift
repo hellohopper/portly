@@ -44,7 +44,7 @@ struct CLICommandTests {
     }
 
     @Test func parsesKillWithValidPort() {
-        #expect(CLICommand.parse(["kill", "3000"]) == .kill(port: 3000))
+        #expect(CLICommand.parse(["kill", "3000"]) == .kill(port: 3000, tree: false))
     }
 
     @Test func rejectsMalformedKill() {
