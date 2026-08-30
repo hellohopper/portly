@@ -233,6 +233,28 @@ final class PortStore: ObservableObject {
         return .healthy
     }
 
+    /// Off by default, same reasoning as `showsPinnedStatusInMenuBar`: the menu bar
+    /// icon is the one thing every user sees whether they asked for it or not.
+    @Published var showsResourceSummaryInMenuBar: Bool = Defaults.bool(PortStore.menuBarResourceSummaryDefaultsKey) {
+        didSet {
+            guard showsResourceSummaryInMenuBar != oldValue else { return }
+            Defaults.set(showsResourceSummaryInMenuBar, for: Self.menuBarResourceSummaryDefaultsKey)
+        }
+    }
+    static let menuBarResourceSummaryDefaultsKey = "showsResourceSummaryInMenuBar"
+
+    /// Combined CPU/MEM across every tracked port, for an at-a-glance "is something
+    /// eating my machine" without opening the panel. nil until the first poll with
+    /// process metrics has landed.
+    var resourceSummary: (cpuPercent: Double, memPercent: Double)? {
+        let samples = ports.compactMap { info -> (Double, Double)? in
+            guard let cpu = info.cpuPercent, let mem = info.memPercent else { return nil }
+            return (cpu, mem)
+        }
+        guard !samples.isEmpty else { return nil }
+        return (samples.reduce(0) { $0 + $1.0 }, samples.reduce(0) { $0 + $1.1 })
+    }
+
     static let idleAlertsEnabledDefaultsKey = "idlePortAlertsEnabled"
     static let idleAutoKillEnabledDefaultsKey = "idlePortAutoKillEnabled"
     private let idleTracker = IdlePortTracker()

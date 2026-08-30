@@ -102,6 +102,8 @@ _portly() {
         'kill:SIGTERM the process listening on a port'
         'restart:Kill and relaunch it with the same command line'
         'run:Run a command with $PORT set to a free port'
+        'workspace:Start/stop everything a .portly.json declares'
+        'remote:Run portly on another host over ssh'
         'completions:Print a shell completion script'
         'version:Print the version'
         'help:Show help'
@@ -123,6 +125,9 @@ _portly() {
         completions)
             (( CURRENT == 3 )) && _values 'shell' zsh fish
             ;;
+        workspace)
+            (( CURRENT == 3 )) && _values 'action' up down status
+            ;;
         list)
             (( CURRENT == 3 )) && _values 'option' --json
             ;;
@@ -141,11 +146,14 @@ complete -c portly -n '__fish_use_subcommand' -a free -d 'Print an unused port f
 complete -c portly -n '__fish_use_subcommand' -a kill -d 'SIGTERM the process listening on a port'
 complete -c portly -n '__fish_use_subcommand' -a restart -d 'Kill and relaunch it with the same command line'
 complete -c portly -n '__fish_use_subcommand' -a run -d 'Run a command with $PORT set to a free port'
+complete -c portly -n '__fish_use_subcommand' -a workspace -d 'Start/stop everything a .portly.json declares'
+complete -c portly -n '__fish_use_subcommand' -a remote -d 'Run portly on another host over ssh'
 complete -c portly -n '__fish_use_subcommand' -a completions -d 'Print a shell completion script'
 complete -c portly -n '__fish_use_subcommand' -a version -d 'Print the version'
 complete -c portly -n '__fish_use_subcommand' -a help -d 'Show help'
 complete -c portly -n '__fish_seen_subcommand_from list' -l json -d 'Machine-readable JSON output'
 complete -c portly -n '__fish_seen_subcommand_from completions' -a 'zsh fish'
+complete -c portly -n '__fish_seen_subcommand_from workspace' -a 'up down status'
 """
 
 func run() -> Int32 {
@@ -271,6 +279,77 @@ func run() -> Int32 {
         execvp(command[0], &argv)
         FileHandle.standardError.write(Data("Failed to run \(command[0]): \(String(cString: strerror(errno)))\n".utf8))
         return 127
+
+    case .workspace(let action):
+        let cwd = FileManager.default.currentDirectoryPath
+        let projectRoot = GitProjectResolver.projectRoot(fromDirectory: cwd)
+        let config = ProjectConfigResolver.shared.config(fromDirectory: cwd)
+
+        switch action {
+        case .up:
+            guard !config.commands.isEmpty else {
+                FileHandle.standardError.write(Data("No \"commands\" declared in \(ProjectConfigResolver.fileName) at \(projectRoot.path).\n".utf8))
+                return 1
+            }
+            var failures = 0
+            for name in config.commands.keys.sorted() {
+                let commandLine = config.commands[name]!
+                if ProcessLauncher.launch(commandLine: commandLine, workingDirectory: projectRoot.path) {
+                    print("Started \(name): \(commandLine)")
+                } else {
+                    FileHandle.standardError.write(Data("Failed to start \(name): \(commandLine)\n".utf8))
+                    failures += 1
+                }
+            }
+            return failures == 0 ? 0 : 1
+
+        case .down:
+            guard !config.expectedPorts.isEmpty else {
+                FileHandle.standardError.write(Data("No expected ports declared in \(ProjectConfigResolver.fileName) at \(projectRoot.path).\n".utf8))
+                return 1
+            }
+            let matches = PortScanner.scan().filter { config.expectedPorts.contains($0.port) }
+            guard !matches.isEmpty else {
+                print("Nothing is listening on this project's expected ports.")
+                return 0
+            }
+            for info in matches {
+                kill(info.pid, SIGTERM)
+                print("Sent SIGTERM to \(info.processName) (port \(info.port)).")
+            }
+            return 0
+
+        case .status:
+            guard !config.expectedPorts.isEmpty else {
+                FileHandle.standardError.write(Data("No expected ports declared in \(ProjectConfigResolver.fileName) at \(projectRoot.path).\n".utf8))
+                return 1
+            }
+            let live = Dictionary(uniqueKeysWithValues: PortScanner.scan().map { ($0.port, $0) })
+            for port in config.expectedPorts.sorted() {
+                if let info = live[port] {
+                    print("\(port)  up    \(info.processName) (pid \(info.pid))")
+                } else {
+                    print("\(port)  down")
+                }
+            }
+            return 0
+        }
+
+    case .remote(let host, let args):
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = [host, "portly"] + args
+        process.standardOutput = FileHandle.standardOutput
+        process.standardError = FileHandle.standardError
+        process.standardInput = FileHandle.standardInput
+        do {
+            try process.run()
+        } catch {
+            FileHandle.standardError.write(Data("Failed to run ssh: \(error.localizedDescription)\n".utf8))
+            return 1
+        }
+        process.waitUntilExit()
+        return process.terminationStatus
 
     case .completions(let shell):
         print(shell == .zsh ? zshCompletionScript : fishCompletionScript)

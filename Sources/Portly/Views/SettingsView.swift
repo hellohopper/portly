@@ -72,6 +72,11 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
+            Toggle("Show total CPU/MEM in menu bar", isOn: $store.showsResourceSummaryInMenuBar)
+            Text("Adds the combined CPU and memory usage across every tracked port next to the icon.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
             Divider()
 
             Toggle("Alert on idle ports", isOn: $store.isIdlePortAlertsEnabled)
