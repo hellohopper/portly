@@ -63,6 +63,11 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | Open log file | Finds a log file a detached process is writing to — for servers with no terminal tab to reveal |
 | Docker logs | Right-click a container-backed port to copy its `docker logs -f` command |
 | Menu bar health glyph | Optional at-a-glance status for pinned ports, without opening the panel |
+| Menu bar CPU/MEM | Optional combined CPU and memory usage across every tracked port, next to the icon |
+| Share via tunnel | Right-click a port to expose it over the internet with a Cloudflare quick tunnel (`cloudflared`) — no account, no config |
+| `.localhost` request log | Right-click a `.localhost`-mapped port for a rolling log of requests the proxy has forwarded |
+| `portly workspace` | `up` starts every command a `.portly.json` declares (a mini Procfile), `down` kills the project's declared ports, `status` shows which are up |
+| `portly remote <host>` | Runs `portly` on another machine over ssh (e.g. `portly remote devbox kill 3000`) |
 
 ## Download
 
@@ -100,7 +105,21 @@ portly kill 3000 --tree   # ...along with its wrapper processes (npm → node)
 portly restart 3000 # kill it and relaunch the same command line
 portly run -- npm run dev          # sets $PORT to a free port, then execs the command
 portly run --port 4000 -- node app.js  # prefers 4000, falls back if it's taken
+portly workspace up      # starts every command .portly.json declares under "commands"
+portly workspace down    # kills whatever is listening on this project's declared ports
+portly workspace status  # shows each declared port's up/down state
+portly remote devbox            # `portly list` on devbox, over ssh
+portly remote devbox kill 3000  # any subcommand works
 portly completions zsh > ~/.zsh/completions/_portly  # or `fish` for a fish script
+```
+
+A `.portly.json` at a project's git root can declare a `"commands"` map for `portly workspace`:
+
+```json
+{
+  "commands": { "web": "npm run dev", "api": "uvicorn app:app --reload" },
+  "expects": [3000, 8000]
+}
 ```
 
 Homebrew installs the `portly` command automatically. For manual installs, symlink it once:

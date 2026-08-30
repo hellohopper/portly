@@ -5,6 +5,7 @@ import AppKit
 struct PortRow: View {
     let info: PortInfo
     @ObservedObject var store: PortStore
+    @ObservedObject private var tunnelManager = TunnelManager.shared
     let isSelecting: Bool
     let isSelected: Bool
     let isFocused: Bool
@@ -18,6 +19,7 @@ struct PortRow: View {
     private var health: HealthChecker.Health? { store.healthResults[info.port] }
     private var proxyName: String? { store.proxyNames[info.port] }
     private var isProxyEnabled: Bool { store.isLocalhostProxyEnabled }
+    private var tunnelState: TunnelManager.State? { tunnelManager.tunnels[info.port] }
 
     private func onKill() { store.kill(info) }
     private func onKillTree() { store.killTree(info) }
@@ -37,6 +39,8 @@ struct PortRow: View {
     @State private var isLoadingPeers = false
     @State private var peers: [ConnectionResolver.Peer] = []
     @State private var showsNoLogAlert = false
+    @State private var isShowingProxyLog = false
+    @State private var proxyLogEntries: [ProxyRequestLog.Entry] = []
 
     var body: some View {
         HStack {
@@ -192,10 +196,12 @@ struct PortRow: View {
             Button("Copy localhost URL") { copyLocalhostURL() }
             if let proxyName {
                 Button("Copy .localhost URL") { copyToPasteboard(proxyURLString(name: proxyName)) }
+                Button("Recent requests") { loadProxyLog(name: proxyName) }
             }
             if info.isTCP {
                 Button("Copy as curl") { copyToPasteboard(CurlCommandBuilder.command(port: info.port)) }
                 Button("Show connected clients") { loadPeers() }
+                tunnelMenuContent
             }
             if let containerName = info.dockerContainerName {
                 Button("Copy docker logs command") {
@@ -212,6 +218,11 @@ struct PortRow: View {
         }
         .popover(isPresented: $isShowingPeers) {
             PeersPopover(port: info.port, peers: peers, isLoading: isLoadingPeers)
+        }
+        .popover(isPresented: $isShowingProxyLog) {
+            if let proxyName {
+                ProxyRequestLogPopover(name: proxyName, entries: proxyLogEntries)
+            }
         }
         .alert("No log file found", isPresented: $showsNoLogAlert) {
             Button("OK", role: .cancel) {}
@@ -231,6 +242,29 @@ struct PortRow: View {
             }.value
             peers = found
             isLoadingPeers = false
+        }
+    }
+
+    @ViewBuilder
+    private var tunnelMenuContent: some View {
+        switch tunnelState {
+        case nil:
+            Button("Share via tunnel (cloudflared)") { tunnelManager.start(port: info.port) }
+        case .starting:
+            Text("Starting tunnel…")
+        case .running(let url):
+            Button("Copy tunnel URL") { copyToPasteboard(url) }
+            Button("Stop tunnel", role: .destructive) { tunnelManager.stop(port: info.port) }
+        case .failed(let message):
+            Text(message)
+            Button("Retry tunnel") { tunnelManager.start(port: info.port) }
+        }
+    }
+
+    private func loadProxyLog(name: String) {
+        Task {
+            proxyLogEntries = await ProxyRequestLog.shared.recent(for: name)
+            isShowingProxyLog = true
         }
     }
 

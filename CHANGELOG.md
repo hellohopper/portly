@@ -3,6 +3,15 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [0.7.0] - 2026-08-30
+
+### Added
+- Share via tunnel — right-click a port to expose it over the internet with a Cloudflare quick tunnel (`cloudflared tunnel --url`, no account required). Requires `cloudflared` on PATH; Portly doesn't bundle or install it
+- `.localhost` request log — right-click a `.localhost`-mapped port to see the requests the proxy has forwarded (method, path, time)
+- `portly workspace up|down|status` — `.portly.json` gains a `"commands"` map (a mini Procfile); `up` starts everything, `down` kills the project's declared ports, `status` shows which are up
+- `portly remote <host> [args...]` — runs `portly` on another machine over ssh (defaults to `list`)
+- Optional menu bar CPU/MEM summary (combined across every tracked port), alongside the existing pinned-health glyph
+
 ## [0.6.0] - 2026-08-29
 
 ### Fixed

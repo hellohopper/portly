@@ -47,6 +47,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        Publishers.CombineLatest(store.$ports, store.$showsResourceSummaryInMenuBar)
+            .debounce(for: .seconds(3), scheduler: DispatchQueue.main)
+            .sink { [weak self] _, _ in
+                self?.updateMenuBarStatus()
+            }
+            .store(in: &cancellables)
+
         hotkeyManager = HotkeyManager { [weak self] in
             self?.togglePopover()
         }
@@ -68,11 +75,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateMenuBarStatus() {
         guard let button = statusItem?.button else { return }
-        guard store.showsPinnedStatusInMenuBar, let summary = store.pinnedHealthSummary else {
-            button.title = ""
-            return
+
+        var parts: [String] = []
+        if store.showsPinnedStatusInMenuBar, let summary = store.pinnedHealthSummary {
+            parts.append(Self.statusGlyph(for: summary))
         }
-        button.title = " \(Self.statusGlyph(for: summary))"
+        if store.showsResourceSummaryInMenuBar, let resources = store.resourceSummary {
+            parts.append(String(format: "%.0f%% %.0f%%", resources.cpuPercent, resources.memPercent))
+        }
+        button.title = parts.isEmpty ? "" : " " + parts.joined(separator: " ")
     }
 
     private static func statusGlyph(for category: HealthChecker.Category) -> String {
@@ -104,6 +115,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         store.stop()
+        TunnelManager.shared.stopAll()
     }
 
     @objc private func togglePopover() {

@@ -195,6 +195,10 @@ public final class LocalhostProxyServer: @unchecked Sendable {
             return
         }
 
+        if let requestLine = headerText.components(separatedBy: "\r\n").first {
+            Task { await ProxyRequestLog.shared.record(name: name, targetPort: targetPort, requestLine: requestLine) }
+        }
+
         let upstream = NWConnection(host: "127.0.0.1", port: nwPort, using: .tcp)
         upstream.start(queue: .global(qos: .utility))
         // Replay everything read so far (headers, and any body bytes swept up in the

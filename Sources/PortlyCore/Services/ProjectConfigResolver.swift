@@ -25,11 +25,18 @@ public final class ProjectConfigResolver: @unchecked Sendable {
         public var expectedPorts: Set<Int> = []
         /// Ports served over TLS, so the probe uses https://.
         public var tlsPorts: Set<Int> = []
+        /// Named commands the project declares, e.g. `{"web": "npm run dev", "api":
+        /// "uvicorn app:app --reload"}` -- a mini Procfile so `portly workspace up`
+        /// can start the whole project without everyone remembering (or agreeing on)
+        /// the invocation. Keys are sorted before running, since JSON object order
+        /// isn't guaranteed to survive parsing -- deterministic beats "whatever the
+        /// file happened to say" for something that starts processes.
+        public var commands: [String: String] = [:]
 
         public init() {}
 
         public var isEmpty: Bool {
-            labels.isEmpty && healthPaths.isEmpty && expectedPorts.isEmpty && tlsPorts.isEmpty
+            labels.isEmpty && healthPaths.isEmpty && expectedPorts.isEmpty && tlsPorts.isEmpty && commands.isEmpty
         }
 
         public func healthTarget(for port: Int) -> HealthChecker.Target {
@@ -83,7 +90,22 @@ public final class ProjectConfigResolver: @unchecked Sendable {
         config.healthPaths = stringMap(json["health"])
         config.expectedPorts = Set(config.labels.keys).union(portList(json["expects"]))
         config.tlsPorts = trueKeys(json["https"])
+        config.commands = rawStringMap(json["commands"])
         return config
+    }
+
+    /// Like `stringMap`, but keyed by an arbitrary name rather than a port number.
+    private static func rawStringMap(_ raw: Any?) -> [String: String] {
+        guard let dictionary = raw as? [String: Any] else { return [:] }
+        var result: [String: String] = [:]
+        for (key, value) in dictionary {
+            let name = key.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, let string = value as? String else { continue }
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            result[name] = trimmed
+        }
+        return result
     }
 
     private static func stringMap(_ raw: Any?) -> [Int: String] {

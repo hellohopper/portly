@@ -9,9 +9,17 @@ enum CLICommand: Equatable {
     case kill(port: Int, tree: Bool)
     case restart(port: Int)
     case run(port: Int?, command: [String])
+    case workspace(WorkspaceAction)
+    case remote(host: String, args: [String])
     case completions(ShellKind)
     case version
     case help
+
+    enum WorkspaceAction: String, Equatable {
+        case up
+        case down
+        case status
+    }
 
     enum ShellKind: String, Equatable {
         case zsh
@@ -62,6 +70,14 @@ enum CLICommand: Equatable {
             let command = Array(rest[(index + 1)...])
             guard !command.isEmpty else { return nil }
             return .run(port: port, command: command)
+        case "workspace":
+            guard arguments.count == 2, let action = WorkspaceAction(rawValue: arguments[1]) else { return nil }
+            return .workspace(action)
+        case "remote":
+            guard arguments.count >= 2, !arguments[1].isEmpty else { return nil }
+            let host = arguments[1]
+            let remoteArgs = arguments.count > 2 ? Array(arguments.dropFirst(2)) : ["list"]
+            return .remote(host: host, args: remoteArgs)
         case "completions":
             guard arguments.count == 2, let shell = ShellKind(rawValue: arguments[1]) else { return nil }
             return .completions(shell)
@@ -92,6 +108,14 @@ enum CLICommand: Equatable {
       run -- <cmd>     Run <cmd> with $PORT set to a free port (avoids "already in
                        use" errors); --port <n> requests a specific one, falling
                        back to another free port if <n> is taken
+      workspace up     Start every command .portly.json declares under "commands",
+                       in the current project (a mini Procfile)
+      workspace down   Kill whatever is listening on this project's declared/expected
+                       ports
+      workspace status Show each declared port's up/down state
+      remote <host> [args...]
+                       Run `portly [args...]` on <host> over ssh (requires portly to
+                       be installed there too); defaults to `list` with no args
       completions <shell>
                        Print a completion script for zsh or fish
       version          Print the version

@@ -52,6 +52,20 @@ struct ProjectConfigResolverTests {
         #expect(config.expectedPorts == [8080])
     }
 
+    @Test func parsesCommands() {
+        let config = ProjectConfigResolver.parse(json(
+            #"{"commands": {"web": "npm run dev", "api": "uvicorn app:app --reload"}}"#
+        ))
+        #expect(config.commands == ["web": "npm run dev", "api": "uvicorn app:app --reload"])
+    }
+
+    @Test func dropsCommandsWithEmptyNameOrValue() {
+        let config = ProjectConfigResolver.parse(json(
+            #"{"commands": {"web": "npm run dev", "": "blank name", "empty": "   ", "bad": 42}}"#
+        ))
+        #expect(config.commands == ["web": "npm run dev"])
+    }
+
     @Test func normalisesHealthPathsMissingALeadingSlash() {
         let target = HealthChecker.Target(path: "healthz")
         #expect(target.path == "/healthz")

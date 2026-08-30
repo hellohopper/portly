@@ -82,6 +82,27 @@ struct CLICommandTests {
         #expect(CLICommand.parse(["run", "--port", "70000", "--", "node"]) == nil)
     }
 
+    @Test func parsesWorkspaceActions() {
+        #expect(CLICommand.parse(["workspace", "up"]) == .workspace(.up))
+        #expect(CLICommand.parse(["workspace", "down"]) == .workspace(.down))
+        #expect(CLICommand.parse(["workspace", "status"]) == .workspace(.status))
+    }
+
+    @Test func rejectsMalformedWorkspace() {
+        #expect(CLICommand.parse(["workspace"]) == nil)
+        #expect(CLICommand.parse(["workspace", "sideways"]) == nil)
+        #expect(CLICommand.parse(["workspace", "up", "extra"]) == nil)
+    }
+
+    @Test func parsesRemoteWithAndWithoutArgs() {
+        #expect(CLICommand.parse(["remote", "devbox"]) == .remote(host: "devbox", args: ["list"]))
+        #expect(CLICommand.parse(["remote", "devbox", "kill", "3000"]) == .remote(host: "devbox", args: ["kill", "3000"]))
+    }
+
+    @Test func rejectsMalformedRemote() {
+        #expect(CLICommand.parse(["remote"]) == nil)
+    }
+
     @Test func parsesCompletions() {
         #expect(CLICommand.parse(["completions", "zsh"]) == .completions(.zsh))
         #expect(CLICommand.parse(["completions", "fish"]) == .completions(.fish))
