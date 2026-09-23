@@ -57,23 +57,30 @@ public enum Shell {
         _ arguments: [String],
         timeout: TimeInterval
     ) -> (output: String?, status: Int32)? {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.arguments = arguments
-
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        process.standardOutput = outPipe
-        process.standardError = errPipe
-        // Never share the caller's stdin: the CLI runs attached to a terminal, and an
-        // interactive child (e.g. `zsh -i` reading PATH) would contend for it.
-        process.standardInput = FileHandle.nullDevice
-
-        do {
-            try process.run()
-        } catch {
+        guard let outPipe = Spawner.makePipe() else { return nil }
+        guard let errPipe = Spawner.makePipe() else {
+            close(outPipe.read); close(outPipe.write)
             return nil
         }
+
+        // Spawned rather than run through `Process`: a `Process` child inherits every
+        // stray descriptor the parent holds, including *other* concurrent helpers'
+        // pipes -- and one child holding another's pipe open means that reader never
+        // sees EOF. stdin is /dev/null: the CLI runs attached to a terminal, and an
+        // interactive child (e.g. `zsh -i` reading PATH) must not contend for it.
+        let pid: pid_t
+        do {
+            pid = try Spawner.spawn(
+                executable: path, arguments: arguments,
+                stdout: outPipe.write, stderr: errPipe.write, reap: false
+            )
+        } catch {
+            [outPipe.read, outPipe.write, errPipe.read, errPipe.write].forEach { close($0) }
+            return nil
+        }
+        // Only the child should hold the write ends, or the readers never see EOF.
+        close(outPipe.write)
+        close(errPipe.write)
 
         // Read both pipes concurrently. Draining stderr is not optional: it is the
         // difference between "the child finishes" and "the child blocks on a full
@@ -81,22 +88,29 @@ public enum Shell {
         let collected = Collector()
         let group = DispatchGroup()
         let queue = DispatchQueue(label: "dev.hellohopper.portly.shell", attributes: .concurrent)
+        let outHandle = FileHandle(fileDescriptor: outPipe.read, closeOnDealloc: true)
+        let errHandle = FileHandle(fileDescriptor: errPipe.read, closeOnDealloc: true)
 
-        queue.async(group: group) { collected.setOut(outPipe.fileHandleForReading.readDataToEndOfFile()) }
+        queue.async(group: group) { collected.setOut(outHandle.readDataToEndOfFile()) }
         // stderr is read purely to drain it; the content is discarded.
-        queue.async(group: group) { _ = errPipe.fileHandleForReading.readDataToEndOfFile() }
+        queue.async(group: group) { _ = errHandle.readDataToEndOfFile() }
 
         if group.wait(timeout: .now() + timeout) == .timedOut {
-            // Terminating closes the child's pipe ends, which unblocks both readers.
-            process.terminate()
+            // Terminating closes the child's pipe ends, which unblocks both readers
+            // (unless a grandchild inherited them -- then they're abandoned).
+            kill(pid, SIGTERM)
             _ = group.wait(timeout: .now() + 1)
-            // A child that ignores SIGTERM would otherwise hang waitUntilExit below.
-            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
-            process.waitUntilExit()
+            var status: Int32 = 0
+            // A child that ignores SIGTERM (an interactive shell does) would otherwise
+            // hang the wait below.
+            if waitpid(pid, &status, WNOHANG) == 0 {
+                kill(pid, SIGKILL)
+                _ = Spawner.wait(for: pid)
+            }
             return nil
         }
 
-        process.waitUntilExit()
-        return (collected.out.flatMap { String(data: $0, encoding: .utf8) }, process.terminationStatus)
+        let status = Spawner.wait(for: pid)
+        return (collected.out.flatMap { String(data: $0, encoding: .utf8) }, status)
     }
 }

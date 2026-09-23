@@ -20,6 +20,7 @@ All notable changes to Portly are documented here. Format loosely follows
 - `.localhost` proxy: reads are now paced by the receiving side (a slow client used to make the proxy buffer a whole response in memory), and later requests on a keep-alive connection show up in the request log
 - Submodules' relative `gitdir:` paths resolved against the wrong directory, losing the branch
 - A timed-out helper process that ignored SIGTERM could hang the caller
+- **Child processes inherited every stray descriptor Portly had open**, including other helpers' pipes: with several helpers running at once, one could hold another's pipe open so its reader timed out (this is what made `Shell` tests fail on CI), and a relaunched dev server pinned Portly's descriptors for its whole lifetime. Helpers and relaunched servers are now spawned with only stdin/stdout/stderr, in their own process group, and reaped when they exit
 
 ### Changed
 - Port scanning reads sockets straight from the kernel (libproc) instead of spawning `lsof` — ~6ms instead of ~140ms per refresh, with `lsof` kept as a fallback. Connected UDP client sockets (e.g. a browser's QUIC connections) are no longer listed as listening ports

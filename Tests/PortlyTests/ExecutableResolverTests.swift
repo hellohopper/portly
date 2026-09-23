@@ -28,6 +28,6 @@ struct ExecutableResolverTests {
 
     /// A missing executable used to "launch" fine via /usr/bin/env and report success.
     @Test func launcherReportsAMissingExecutableAsFailure() {
-        #expect(!ProcessLauncher.launch(commandLine: "portly-no-such-tool --flag", workingDirectory: nil))
+        #expect(!ProcessLauncher.launch(commandLine: "/nonexistent/portly-no-such-tool --flag", workingDirectory: nil))
     }
 }
