@@ -1,6 +1,7 @@
 import Foundation
 import AppKit
 import CryptoKit
+import Security
 
 /// Downloads a release DMG, mounts it, swaps the running app bundle for the one
 /// inside, then relaunches. Self-replacement only runs when the app is installed
@@ -32,13 +33,16 @@ enum AutoUpdater {
 
         // Fetch the expected checksum before downloading the (much larger) DMG,
         // so a broken/missing sha256 asset fails fast rather than after the download.
-        var expectedSHA256: String?
-        if let sha256URL {
-            guard let checksum = await fetchExpectedChecksum(from: sha256URL) else {
-                onPhaseChange(.failed("Could not verify the update's checksum"))
-                return
-            }
-            expectedSHA256 = checksum
+        // No checksum asset means nothing to verify against: fail closed and let the
+        // user take it from the release page, rather than silently skipping the check.
+        guard let sha256URL else {
+            onPhaseChange(.failed("This release has no checksum to verify against"))
+            NSWorkspace.shared.open(releasePageURL)
+            return
+        }
+        guard let expectedSHA256 = await fetchExpectedChecksum(from: sha256URL) else {
+            onPhaseChange(.failed("Could not verify the update's checksum"))
+            return
         }
 
         guard let (downloadedURL, response) = try? await URLSession.shared.download(from: dmgURL),
@@ -56,17 +60,21 @@ enum AutoUpdater {
         }
         defer { try? FileManager.default.removeItem(at: dmgPath) }
 
-        if let expectedSHA256 {
-            guard let actualSHA256 = sha256(ofFileAt: dmgPath), actualSHA256 == expectedSHA256 else {
-                onPhaseChange(.failed("Downloaded update failed checksum verification"))
-                return
-            }
+        // Hashing, mounting and copying are all blocking; on the main actor they froze
+        // the whole UI (and the menu bar icon) for the duration of the install.
+        let actualSHA256 = await Task.detached(priority: .userInitiated) { sha256(ofFileAt: dmgPath) }.value
+        guard actualSHA256 == expectedSHA256 else {
+            onPhaseChange(.failed("Downloaded update failed checksum verification"))
+            return
         }
 
         onPhaseChange(.installing)
         let mountPoint = FileManager.default.temporaryDirectory.appendingPathComponent("PortlyUpdateMount-\(UUID().uuidString)")
 
-        guard run("/usr/bin/hdiutil", ["attach", dmgPath.path, "-nobrowse", "-mountpoint", mountPoint.path]) else {
+        let mounted = await Task.detached(priority: .userInitiated) {
+            run("/usr/bin/hdiutil", ["attach", dmgPath.path, "-nobrowse", "-mountpoint", mountPoint.path])
+        }.value
+        guard mounted else {
             onPhaseChange(.failed("Could not mount the update image"))
             return
         }
@@ -84,16 +92,33 @@ enum AutoUpdater {
         let stagedApp = FileManager.default.temporaryDirectory
             .appendingPathComponent("PortlyUpdateStaging-\(UUID().uuidString)")
             .appendingPathComponent("Portly.app")
-        do {
-            try FileManager.default.createDirectory(
-                at: stagedApp.deletingLastPathComponent(), withIntermediateDirectories: true
-            )
-            try FileManager.default.copyItem(at: sourceApp, to: stagedApp)
-        } catch {
-            onPhaseChange(.failed("Could not stage the update (\(error.localizedDescription))"))
+        let stagingError: String? = await Task.detached(priority: .userInitiated) {
+            do {
+                try FileManager.default.createDirectory(
+                    at: stagedApp.deletingLastPathComponent(), withIntermediateDirectories: true
+                )
+                try FileManager.default.copyItem(at: sourceApp, to: stagedApp)
+                return nil
+            } catch {
+                return error.localizedDescription
+            }
+        }.value
+        defer { try? FileManager.default.removeItem(at: stagedApp.deletingLastPathComponent()) }
+        if let stagingError {
+            onPhaseChange(.failed("Could not stage the update (\(stagingError))"))
             return
         }
-        defer { try? FileManager.default.removeItem(at: stagedApp.deletingLastPathComponent()) }
+
+        // The checksum only proves the DMG matches what the release lists; both come
+        // from the same place. The code signature ties the new bundle to whoever
+        // signed *this* one.
+        let signatureOK = await Task.detached(priority: .userInitiated) {
+            hasTrustedSignature(stagedApp, matching: currentTeamIdentifier())
+        }.value
+        guard signatureOK else {
+            onPhaseChange(.failed("The update isn't signed by the same developer"))
+            return
+        }
 
         let destinationApp = URL(fileURLWithPath: currentBundlePath)
         do {
@@ -114,6 +139,34 @@ enum AutoUpdater {
         let hex = text.split(whereSeparator: { $0.isWhitespace }).first.map(String.init)
         guard let hex, hex.count == 64, hex.allSatisfy(\.isHexDigit) else { return nil }
         return hex.lowercased()
+    }
+
+    /// The Team ID the running app was signed with, or nil for ad-hoc/unsigned builds.
+    static func currentTeamIdentifier() -> String? {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return nil }
+        var staticCode: SecStaticCode?
+        guard SecCodeCopyStaticCode(code, [], &staticCode) == errSecSuccess, let staticCode else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let dictionary = info as? [String: Any] else { return nil }
+        return dictionary[kSecCodeInfoTeamIdentifier as String] as? String
+    }
+
+    /// Valid signature over the whole bundle, and -- when the running app has a Team
+    /// ID -- a leaf certificate from that same team.
+    static func hasTrustedSignature(_ appURL: URL, matching teamIdentifier: String?) -> Bool {
+        var staticCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(appURL as CFURL, [], &staticCode) == errSecSuccess,
+              let staticCode else { return false }
+
+        var requirement: SecRequirement?
+        if let teamIdentifier {
+            let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(teamIdentifier)\""
+            guard SecRequirementCreateWithString(text as CFString, [], &requirement) == errSecSuccess else { return false }
+        }
+        let flags = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSCheckNestedCode | kSecCSStrictValidate)
+        return SecStaticCodeCheckValidity(staticCode, flags, requirement) == errSecSuccess
     }
 
     private static func sha256(ofFileAt url: URL) -> String? {

@@ -22,8 +22,8 @@ struct PortExporterTests {
         let data = PortExporter.export([makePort(), makePort(port: 3000)], format: .csv)
         let lines = String(data: data, encoding: .utf8)!.split(separator: "\n")
         #expect(lines.count == 3)
-        #expect(lines[0] == "port,proto,pid,processName,frameworkLabel,projectName,gitBranch")
-        #expect(lines[1] == "5173,TCP,4821,node,Vite,portly-web,main")
+        #expect(lines[0] == "port,proto,pid,processName,frameworkLabel,projectName,gitBranch,bindAddress,exposedToNetwork")
+        #expect(lines[1] == "5173,TCP,4821,node,Vite,portly-web,main,,false")
     }
 
     @Test func csvEscapesFieldsContainingCommasAndQuotes() {
@@ -32,7 +32,7 @@ struct PortExporterTests {
             format: .csv
         )
         let lines = String(data: data, encoding: .utf8)!.split(separator: "\n")
-        #expect(lines[1] == "5173,TCP,4821,\"weird, \"\"name\"\"\",,,")
+        #expect(lines[1] == "5173,TCP,4821,\"weird, \"\"name\"\"\",,,,,false")
     }
 
     @Test func csvLeavesEmptyFieldsForMissingOptionals() {
@@ -41,7 +41,7 @@ struct PortExporterTests {
             format: .csv
         )
         let lines = String(data: data, encoding: .utf8)!.split(separator: "\n")
-        #expect(lines[1] == "5173,TCP,4821,node,,,")
+        #expect(lines[1] == "5173,TCP,4821,node,,,,,false")
     }
 
     @Test func jsonRoundTripsAllFields() throws {

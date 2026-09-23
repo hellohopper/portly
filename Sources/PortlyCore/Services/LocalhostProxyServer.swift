@@ -208,8 +208,30 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         // Both directions must finish before the pair is torn down; whichever ends
         // first only half-closes.
         let pair = ConnectionPair(client: connection, upstream: upstream)
-        pipe(from: connection, to: upstream, pair: pair)
+        pipe(from: connection, to: upstream, pair: pair) { data in
+            // Keep-alive: later requests on the same connection never go back through
+            // `route`, so log any chunk that opens with a request line too.
+            guard let requestLine = Self.requestLine(startingChunk: data) else { return }
+            Task { await ProxyRequestLog.shared.record(name: name, targetPort: targetPort, requestLine: requestLine) }
+        }
         pipe(from: upstream, to: connection, pair: pair)
+    }
+
+    private static let requestMethods: Set<String> = [
+        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE",
+    ]
+
+    /// The request line when `data` starts a new HTTP/1.x request, e.g.
+    /// "GET /api/users HTTP/1.1". Best-effort: a request that begins mid-chunk (after
+    /// the previous body, in the same read) isn't seen, but a body is never mistaken
+    /// for a request unless it literally begins with one.
+    static func requestLine(startingChunk data: Data) -> String? {
+        guard let newline = data.prefix(2048).firstIndex(of: UInt8(ascii: "\r")),
+              let line = String(data: data[data.startIndex..<newline], encoding: .utf8) else { return nil }
+        let parts = line.split(separator: " ")
+        guard parts.count == 3, requestMethods.contains(String(parts[0])),
+              parts[2].hasPrefix("HTTP/1.") else { return nil }
+        return line
     }
 
     /// Tracks how many of a proxied connection's two directions have finished, so the
@@ -239,26 +261,47 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         }
     }
 
-    private func pipe(from source: NWConnection, to destination: NWConnection, pair: ConnectionPair) {
+    private func pipe(
+        from source: NWConnection,
+        to destination: NWConnection,
+        pair: ConnectionPair,
+        onChunk: (@Sendable (Data) -> Void)? = nil
+    ) {
         source.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { [weak self] data, _, isComplete, error in
-            if let data, !data.isEmpty {
-                destination.send(content: data, completion: .contentProcessed { _ in })
+            let proxy = self
+            let proceed: @Sendable () -> Void = {
+                if error != nil {
+                    pair.cancelBoth()
+                    return
+                }
+                if isComplete {
+                    // A half-close on this direction only means this side finished sending
+                    // (the standard "write request, shutdown(SHUT_WR), read response"
+                    // pattern). Forward the FIN and let the other direction keep running --
+                    // cancelling both here would discard the response the client is waiting
+                    // for.
+                    destination.send(content: nil, isComplete: true, completion: .contentProcessed { _ in })
+                    if pair.directionFinished() { pair.cancelBoth() }
+                    return
+                }
+                proxy?.pipe(from: source, to: destination, pair: pair, onChunk: onChunk)
             }
-            if error != nil {
-                pair.cancelBoth()
+
+            guard let data, !data.isEmpty else {
+                proceed()
                 return
             }
-            if isComplete {
-                // A half-close on this direction only means this side finished sending
-                // (the standard "write request, shutdown(SHUT_WR), read response"
-                // pattern). Forward the FIN and let the other direction keep running --
-                // cancelling both here would discard the response the client is waiting
-                // for.
-                destination.send(content: nil, isComplete: true, completion: .contentProcessed { _ in })
-                if pair.directionFinished() { pair.cancelBoth() }
-                return
-            }
-            self?.pipe(from: source, to: destination, pair: pair)
+            onChunk?(data)
+            // Backpressure: read the next chunk only once this one has been handed to
+            // the destination. Reading eagerly buffered an entire large response in
+            // memory whenever the client consumed it slower than the server sent it.
+            destination.send(content: data, completion: .contentProcessed { sendError in
+                if sendError != nil {
+                    pair.cancelBoth()
+                } else {
+                    proceed()
+                }
+            })
         }
     }
 

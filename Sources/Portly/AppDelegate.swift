@@ -4,7 +4,7 @@ import Combine
 import PortlyCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var hotkeyManager: HotkeyManager?
@@ -21,6 +21,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let popover = NSPopover()
         popover.behavior = .transient
+        // A transient popover mostly closes by clicking elsewhere, which never goes
+        // through togglePopover -- the delegate is the only reliable close signal.
+        popover.delegate = self
         popover.contentSize = NSSize(width: 400, height: 480)
         popover.contentViewController = NSHostingController(rootView: MenuContentView(store: store, updates: updates, onHotkeyChange: { [weak self] keyCode, modifiers in
             self?.hotkeyManager?.reregister(keyCode: keyCode, modifiers: modifiers)
@@ -118,11 +121,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         TunnelManager.shared.stopAll()
     }
 
+    func popoverDidClose(_ notification: Notification) {
+        store.setPanelVisible(false)
+    }
+
     @objc private func togglePopover() {
         guard let button = statusItem?.button, let popover else { return }
         if popover.isShown {
-            popover.performClose(nil)
-            store.setPanelVisible(false)
+            popover.performClose(nil) // popoverDidClose drops the poll rate
         } else {
             store.clearAlert()
             store.setPanelVisible(true)

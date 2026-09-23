@@ -16,27 +16,37 @@ public enum ProcessLauncher {
 
     @discardableResult
     public static func launch(commandLine: String, workingDirectory: String?) -> Bool {
+        launchProcess(commandLine: commandLine, workingDirectory: workingDirectory) != nil
+    }
+
+    /// Resolves argv[0] against the user's real PATH (see `ExecutableResolver`) and
+    /// starts it. Returns nil when the executable can't be found or won't start --
+    /// resolving up front is what makes that detectable: going through
+    /// `/usr/bin/env` meant `env` always launched, so a missing `node` reported
+    /// success while the server stayed dead.
+    @discardableResult
+    public static func launchProcess(
+        commandLine: String,
+        workingDirectory: String?
+    ) -> Process? {
         let argv = argv(from: commandLine)
-        guard let executable = argv.first else { return false }
+        guard let name = argv.first, let executable = ExecutableResolver.resolve(name) else { return nil }
 
         let process = Process()
-        if executable.hasPrefix("/") {
-            process.executableURL = URL(fileURLWithPath: executable)
-            process.arguments = Array(argv.dropFirst())
-        } else {
-            // A bare name (e.g. "node") needs PATH resolution, which Process doesn't
-            // do; env does, without involving a shell.
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = argv
-        }
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = Array(argv.dropFirst())
+        // The child needs the same PATH: `npm` is itself a `#!/usr/bin/env node` script.
+        process.environment = ExecutableResolver.environment(
+            prepending: (executable as NSString).deletingLastPathComponent
+        )
         if let workingDirectory, FileManager.default.fileExists(atPath: workingDirectory) {
             process.currentDirectoryURL = URL(fileURLWithPath: workingDirectory)
         }
         do {
             try process.run()
-            return true
+            return process
         } catch {
-            return false
+            return nil
         }
     }
 }

@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import PortlyCore
 
 struct PortScannerTests {
@@ -91,5 +92,41 @@ struct PortScannerTests {
         ]
 
         #expect(PortScanner.mergeSamePidAndPort(entries).count == 3)
+    }
+
+    // MARK: - Native (libproc) scanning
+
+    /// A real listener this process opens is reported with the right pid, port,
+    /// protocol and bind address -- the fields lsof used to provide.
+    @Test func nativeScanFindsOwnTCPListener() throws {
+        let fd = socket(AF_INET, SOCK_STREAM, 0)
+        #expect(fd >= 0)
+        defer { close(fd) }
+
+        var address = sockaddr_in()
+        address.sin_family = sa_family_t(AF_INET)
+        address.sin_addr.s_addr = inet_addr("127.0.0.1")
+        address.sin_port = 0
+        let bound = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                bind(fd, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            }
+        }
+        #expect(bound == 0)
+        #expect(listen(fd, 1) == 0)
+
+        var length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        _ = withUnsafeMutablePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { getsockname(fd, $0, &length) }
+        }
+        let port = Int(UInt16(bigEndian: address.sin_port))
+
+        let entries = try #require(NativeSocketScanner.scan())
+        let mine = try #require(entries.first {
+            $0.pid == ProcessInfo.processInfo.processIdentifier && $0.port == port
+        })
+        #expect(mine.proto == "TCP")
+        #expect(mine.bindAddress == "127.0.0.1")
+        #expect(!mine.isExposedToNetwork)
     }
 }

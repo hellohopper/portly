@@ -85,7 +85,9 @@ public final class HistoryStore: ObservableObject {
             )
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
-            try encoder.encode(events).write(to: fileURL)
+            // Atomic: a crash mid-write would otherwise leave truncated JSON, which
+            // `load` can't decode -- silently wiping the whole history on next launch.
+            try encoder.encode(events).write(to: fileURL, options: .atomic)
         } catch {
             // History is best-effort; a failed save just means it won't survive relaunch.
         }

@@ -2,23 +2,6 @@ import Foundation
 
 public enum UptimeResolver {
 
-    /// Batch-resolves elapsed running time (in seconds) for the given pids using a single `ps` call.
-    public static func elapsedSeconds(for pids: [Int32]) -> [Int32: Int] {
-        guard !pids.isEmpty else { return [:] }
-
-        let pidList = pids.map(String.init).joined(separator: ",")
-        guard let output = Shell.run("/bin/ps", ["-o", "pid=,etime=", "-p", pidList]) else { return [:] }
-
-        var result: [Int32: Int] = [:]
-        for line in output.split(separator: "\n") {
-            let parts = line.trimmingCharacters(in: .whitespaces).split(separator: " ", maxSplits: 1)
-            guard parts.count == 2, let pid = Int32(parts[0]) else { continue }
-            guard let seconds = parseElapsed(String(parts[1])) else { continue }
-            result[pid] = seconds
-        }
-        return result
-    }
-
     /// Parses macOS `ps etime` format: "[[dd-]hh:]mm:ss"
     static func parseElapsed(_ raw: String) -> Int? {
         let trimmed = raw.trimmingCharacters(in: .whitespaces)

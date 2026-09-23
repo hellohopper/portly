@@ -50,6 +50,48 @@ final class ResultBox<T>: @unchecked Sendable {
     var value: T?
 }
 
+/// SIGTERMs native processes, but routes Docker-forwarded ports through the daemon:
+/// their pid is `com.docker.backend`, the forwarder shared by *every* container, so
+/// signalling it would take down all Docker port forwarding rather than the one
+/// container meant. Mirrors `PortStore.kill` in the app. Returns false when a Docker
+/// port couldn't be resolved to a container (and so was deliberately left alone).
+@discardableResult
+func stopPorts(_ matches: [PortInfo], extraPids: Set<Int32> = []) -> Bool {
+    let docker = matches.filter(\.isDockerManaged)
+    var pids = Set(matches.filter { !$0.isDockerManaged }.map(\.pid)).union(extraPids)
+    // A wrapper tree may include the Docker forwarder too; never signal it.
+    let dockerPids = Set(docker.map(\.pid))
+    pids.subtract(dockerPids)
+
+    for pid in pids {
+        kill(pid, SIGTERM)
+    }
+    for info in matches where !info.isDockerManaged {
+        print("Sent SIGTERM to \(info.processName) (port \(info.port)).")
+    }
+
+    guard !docker.isEmpty else { return true }
+    let names = runBlocking { await DockerContainerResolver.shared.containerNames(for: docker.map(\.port)) }
+    var allStopped = true
+    for info in docker {
+        guard let container = names[info.port] else {
+            FileHandle.standardError.write(Data(
+                "Port \(info.port) is forwarded by Docker, but no container could be matched to it -- not killing Docker's shared forwarder.\n".utf8
+            ))
+            allStopped = false
+            continue
+        }
+        let stopped = runBlocking { await DockerContainerResolver.shared.stop(containerName: container) }
+        if stopped {
+            print("Stopped container \(container) (port \(info.port)).")
+        } else {
+            FileHandle.standardError.write(Data("docker stop \(container) failed.\n".utf8))
+            allStopped = false
+        }
+    }
+    return allStopped
+}
+
 let watchTimeFormatter: DateFormatter = {
     let formatter = DateFormatter()
     formatter.dateFormat = "HH:mm:ss"
@@ -184,11 +226,17 @@ func run() -> Int32 {
 
     case .wait(let port, let timeout):
         let deadline = Date().addingTimeInterval(TimeInterval(timeout))
+        var tick = 0
         while Date() < deadline {
-            if PortScanner.scan().contains(where: { $0.port == port }) {
+            // A loopback connect answers the common case in a couple of syscalls; the
+            // full socket scan (once a second) still catches UDP listeners and servers
+            // bound only to a non-loopback interface.
+            if LoopbackProbe.isAcceptingConnections(port: port)
+                || (tick % 4 == 0 && PortScanner.scan().contains(where: { $0.port == port })) {
                 print("Port \(port) is listening.")
                 return 0
             }
+            tick += 1
             Thread.sleep(forTimeInterval: 0.25)
         }
         FileHandle.standardError.write(Data("Timed out after \(timeout)s waiting for port \(port).\n".utf8))
@@ -210,20 +258,18 @@ func run() -> Int32 {
             return 1
         }
 
-        var pids = Set(matches.map(\.pid))
+        var wrappers = Set<Int32>()
         if tree {
-            // Outermost first, so nothing respawns the leaf.
             let table = ProcessTable.snapshot().ancestryTable
-            for info in matches {
-                pids.formUnion(ProcessTreeResolver.ancestry(of: info.pid, in: table).map(\.pid))
+            for info in matches where !info.isDockerManaged {
+                wrappers.formUnion(ProcessTreeResolver.ancestry(of: info.pid, in: table).map(\.pid))
             }
         }
-        for pid in pids {
-            kill(pid, SIGTERM)
+        let ok = stopPorts(matches, extraPids: wrappers)
+        if tree && !wrappers.isEmpty {
+            print("Also sent SIGTERM to \(wrappers.count) wrapper process\(wrappers.count == 1 ? "" : "es").")
         }
-        let names = Set(matches.map(\.processName)).sorted().joined(separator: ", ")
-        print("Sent SIGTERM to \(names) (port \(port))\(tree ? " and its wrappers" : "").")
-        return 0
+        return ok ? 0 : 1
 
     case .restart(let port):
         let matches = enrichedPorts().filter { $0.port == port }
@@ -235,8 +281,12 @@ func run() -> Int32 {
             FileHandle.standardError.write(Data("Couldn't read the command line for port \(port).\n".utf8))
             return 1
         }
-        kill(target.pid, SIGTERM)
-        Thread.sleep(forTimeInterval: 0.5)
+        // Wait for the old process to actually let go of the port; relaunching after a
+        // fixed delay raced slow graceful shutdowns into EADDRINUSE.
+        if ProcessTerminator.terminateBlocking([target.pid]) == .survived {
+            FileHandle.standardError.write(Data("\(target.processName) (pid \(target.pid)) didn't exit; not relaunching.\n".utf8))
+            return 1
+        }
         guard ProcessLauncher.launch(commandLine: commandLine, workingDirectory: target.workingDirectory) else {
             FileHandle.standardError.write(Data("Killed it, but relaunching failed: \(commandLine)\n".utf8))
             return 1
@@ -313,21 +363,24 @@ func run() -> Int32 {
                 print("Nothing is listening on this project's expected ports.")
                 return 0
             }
-            for info in matches {
-                kill(info.pid, SIGTERM)
-                print("Sent SIGTERM to \(info.processName) (port \(info.port)).")
-            }
-            return 0
+            return stopPorts(matches) ? 0 : 1
 
         case .status:
             guard !config.expectedPorts.isEmpty else {
                 FileHandle.standardError.write(Data("No expected ports declared in \(ProjectConfigResolver.fileName) at \(projectRoot.path).\n".utf8))
                 return 1
             }
-            let live = Dictionary(uniqueKeysWithValues: PortScanner.scan().map { ($0.port, $0) })
+            // Grouped, not uniquely keyed: several processes can share one port
+            // (pre-fork servers like `gunicorn -w 4`, SO_REUSEPORT), which used to
+            // crash this with "Duplicate values for key".
+            let live = Dictionary(grouping: PortScanner.scan(), by: \.port)
             for port in config.expectedPorts.sorted() {
-                if let info = live[port] {
-                    print("\(port)  up    \(info.processName) (pid \(info.pid))")
+                if let holders = live[port], !holders.isEmpty {
+                    let owners = holders
+                        .map { "\($0.processName) (pid \($0.pid))" }
+                        .reduce(into: [String]()) { if !$0.contains($1) { $0.append($1) } }
+                        .joined(separator: ", ")
+                    print("\(port)  up    \(owners)")
                 } else {
                     print("\(port)  down")
                 }

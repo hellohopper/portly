@@ -83,14 +83,18 @@ public enum GitProjectResolver {
     static func readBranch(gitDir: URL) -> String? {
         var actualGitDir = gitDir
 
-        // Worktrees: ".git" is a file (not a directory) containing
-        // "gitdir: /path/to/real/.git/worktrees/<name>", which itself has its own HEAD.
+        // Worktrees and submodules: ".git" is a file (not a directory) containing
+        // "gitdir: <path>", which itself has its own HEAD. Submodules write that path
+        // relative ("gitdir: ../.git/modules/lib"), and it's relative to the file's
+        // own directory -- not to whatever this process's cwd happens to be.
         if let contents = try? String(contentsOf: gitDir, encoding: .utf8),
            contents.hasPrefix("gitdir:") {
             let realPath = contents
-                .replacingOccurrences(of: "gitdir:", with: "")
+                .dropFirst("gitdir:".count)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            actualGitDir = URL(fileURLWithPath: realPath)
+            actualGitDir = realPath.hasPrefix("/")
+                ? URL(fileURLWithPath: realPath)
+                : URL(fileURLWithPath: realPath, relativeTo: gitDir.deletingLastPathComponent()).standardizedFileURL
         }
 
         let headURL = actualGitDir.appendingPathComponent("HEAD")

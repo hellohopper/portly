@@ -80,6 +80,9 @@ final class PortStore: ObservableObject {
     static let proxyEnabledDefaultsKey = "localhostProxyEnabled"
 
     func start() {
+        // Resolving the user's PATH asks a login shell, which can take a moment --
+        // do it now, off the main thread, rather than on the first Restart click.
+        Task.detached(priority: .utility) { _ = ExecutableResolver.searchPath }
         NetworkThroughputResolver.shared.start()
         if isLocalhostProxyEnabled {
             startLocalhostProxy()
@@ -247,8 +250,12 @@ final class PortStore: ObservableObject {
     /// eating my machine" without opening the panel. nil until the first poll with
     /// process metrics has landed.
     var resourceSummary: (cpuPercent: Double, memPercent: Double)? {
+        // Rows are per port, but CPU/MEM are per process: a server listening on three
+        // ports must be counted once, not three times.
+        var seenPids = Set<Int32>()
         let samples = ports.compactMap { info -> (Double, Double)? in
-            guard let cpu = info.cpuPercent, let mem = info.memPercent else { return nil }
+            guard seenPids.insert(info.pid).inserted,
+                  let cpu = info.cpuPercent, let mem = info.memPercent else { return nil }
             return (cpu, mem)
         }
         guard !samples.isEmpty else { return nil }
@@ -416,10 +423,20 @@ final class PortStore: ObservableObject {
         guard let commandLine = info.commandLine else { return }
         let workingDirectory = info.workingDirectory
 
-        Darwin.kill(info.pid, SIGTERM)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            ProcessLauncher.launch(commandLine: commandLine, workingDirectory: workingDirectory)
-            self?.refresh()
+        // Relaunching while the old process still holds the port just fails with
+        // EADDRINUSE (or makes Vite drift to 5174), so wait for it to really exit.
+        Task {
+            let outcome = await ProcessTerminator.terminate([info.pid])
+            guard outcome != .survived else {
+                NotificationManager.notifyRestartBlocked(info)
+                refresh()
+                return
+            }
+            if !ProcessLauncher.launch(commandLine: commandLine, workingDirectory: workingDirectory) {
+                NotificationManager.notifyLaunchFailed(commandLine: commandLine)
+            }
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            refresh()
         }
     }
 
@@ -435,6 +452,8 @@ final class PortStore: ObservableObject {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 self?.refresh()
             }
+        } else {
+            NotificationManager.notifyLaunchFailed(commandLine: commandLine)
         }
         return launched
     }

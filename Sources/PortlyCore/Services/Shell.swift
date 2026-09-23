@@ -36,6 +36,27 @@ public enum Shell {
         _ arguments: [String],
         timeout: TimeInterval = 5
     ) -> String? {
+        execute(path, arguments, timeout: timeout)?.output
+    }
+
+    /// Runs a process only for its exit status, discarding output. Success means a
+    /// zero exit: stdout alone can't tell, since a failing command usually prints
+    /// nothing to stdout, which reads as an empty (non-nil) string.
+    @discardableResult
+    public static func succeeds(
+        _ path: String,
+        _ arguments: [String],
+        timeout: TimeInterval = 5
+    ) -> Bool {
+        execute(path, arguments, timeout: timeout)?.status == 0
+    }
+
+    /// Stdout plus exit status, or nil if the process couldn't be launched or timed out.
+    static func execute(
+        _ path: String,
+        _ arguments: [String],
+        timeout: TimeInterval
+    ) -> (output: String?, status: Int32)? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
@@ -44,6 +65,9 @@ public enum Shell {
         let errPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = errPipe
+        // Never share the caller's stdin: the CLI runs attached to a terminal, and an
+        // interactive child (e.g. `zsh -i` reading PATH) would contend for it.
+        process.standardInput = FileHandle.nullDevice
 
         do {
             try process.run()
@@ -66,21 +90,13 @@ public enum Shell {
             // Terminating closes the child's pipe ends, which unblocks both readers.
             process.terminate()
             _ = group.wait(timeout: .now() + 1)
+            // A child that ignores SIGTERM would otherwise hang waitUntilExit below.
+            if process.isRunning { kill(process.processIdentifier, SIGKILL) }
             process.waitUntilExit()
             return nil
         }
 
         process.waitUntilExit()
-        return collected.out.flatMap { String(data: $0, encoding: .utf8) }
-    }
-
-    /// Runs a process only for its exit status, discarding output.
-    @discardableResult
-    public static func succeeds(
-        _ path: String,
-        _ arguments: [String],
-        timeout: TimeInterval = 5
-    ) -> Bool {
-        run(path, arguments, timeout: timeout) != nil
+        return (collected.out.flatMap { String(data: $0, encoding: .utf8) }, process.terminationStatus)
     }
 }

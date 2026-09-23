@@ -3,6 +3,15 @@ import Foundation
 public enum PortScanner {
 
     public static func scan() -> [PortInfo] {
+        // libproc first: same data as lsof, ~20x faster, and no process to spawn.
+        if let native = NativeSocketScanner.scan() {
+            return mergeSamePidAndPort(dedupe(native))
+        }
+        return scanWithLsof()
+    }
+
+    /// Fallback for when the kernel's process list can't be read.
+    static func scanWithLsof() -> [PortInfo] {
         // One lsof covers both protocols: `-sTCP:LISTEN` constrains only the TCP
         // selection, and the `P` field tags each socket so the two can be told apart.
         // -w suppresses the per-unreachable-mount warnings that would otherwise flood
