@@ -30,7 +30,10 @@ jobs:
           # doesn't make it into the log.
           for results in test-results*.xml; do
             echo "=== $results"
-            grep -E '<testsuite |<failure|<testcase[^>]*time="[0-9]{2,}' "$results" | head -60 || true
+            wc -c "$results"
+            # Failures, plus anything slow enough to be the reason the run drags.
+            tr '>' '\n' < "$results" | grep -E '<testsuite |<failure|time="[0-9]{2,}|message=' | head -80 || true
+            head -c 3000 "$results"; echo
           done
 
       - name: Print crash reports
