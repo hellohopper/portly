@@ -94,6 +94,13 @@ struct SettingsView: View {
 
             Divider()
 
+            Toggle("Run portly:// kill/restart links without asking", isOn: $store.trustsURLSchemeActions)
+            Text("Links like portly://open/3000 let launchers such as Raycast drive Portly. Any web page can try to open one too, so kill and restart ask first unless this is on.")
+                .font(.caption)
+                .foregroundStyle(store.trustsURLSchemeActions ? .orange : .secondary)
+
+            Divider()
+
             Text("Export .portly.json")
                 .font(.subheadline.bold())
             if exportable.isEmpty {

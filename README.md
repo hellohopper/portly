@@ -68,6 +68,13 @@ Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io
 | `.localhost` request log | Right-click a `.localhost`-mapped port for a rolling log of requests the proxy has forwarded |
 | `portly workspace` | `up` starts every command a `.portly.json` declares (a mini Procfile), `down` kills the project's declared ports, `status` shows which are up |
 | `portly remote <host>` | Runs `portly` on another machine over ssh (e.g. `portly remote devbox kill 3000`) |
+| Force kill | A process still alive 5s after SIGTERM triggers a notification with a **Force Kill** button; right-click → "Force kill (SIGKILL)" or `portly kill 3000 --force` do it directly |
+| Captured output + log viewer | Servers Portly starts (restart, relaunch, `workspace up`) write to `~/Library/Logs/Portly/`; right-click → "Show log" tails it live in the panel, `portly logs 3000 -f` from a terminal |
+| Actionable notifications | Notifications carry buttons: Relaunch a dead pinned port, Restart a failing one, Kill an idle one, Open a new one in the browser |
+| Project group actions | Restart or stop every server in a project from its section header |
+| `portly://` links | `open portly://open/3000`, `kill`, `force-kill`, `restart`, `pin`, `unpin`, `copy`, `show?search=vite` — for Raycast, Alfred, Shortcuts and scripts. Kill/restart links ask for confirmation unless you trust them in Settings |
+| Workspace dependencies | `.portly.json` services can declare a `port` and `dependsOn`; `portly workspace up` waits for each dependency to listen before starting what needs it |
+| Memory trend | Resident memory (MB) and a sparkline per process; the line turns orange when memory keeps climbing — the slow leak a single %MEM reading hides |
 
 ## Download
 
@@ -102,10 +109,12 @@ portly wait 3000    # block until something is listening (--timeout <s>, exits 1
 portly free         # print an unused port from the common dev ranges
 portly kill 3000    # SIGTERM whatever is listening on port 3000
 portly kill 3000 --tree   # ...along with its wrapper processes (npm → node)
+portly kill 3000 --force  # SIGKILL it if it's still alive 3s after the SIGTERM
+portly logs 3000 -f       # tail the log file the process on 3000 writes to
 portly restart 3000 # kill it and relaunch the same command line
 portly run -- npm run dev          # sets $PORT to a free port, then execs the command
 portly run --port 4000 -- node app.js  # prefers 4000, falls back if it's taken
-portly workspace up      # starts every command .portly.json declares under "commands"
+portly workspace up      # starts every command .portly.json declares, dependencies first
 portly workspace down    # kills whatever is listening on this project's declared ports
 portly workspace status  # shows each declared port's up/down state
 portly remote devbox            # `portly list` on devbox, over ssh
@@ -113,13 +122,29 @@ portly remote devbox kill 3000  # any subcommand works
 portly completions zsh > ~/.zsh/completions/_portly  # or `fish` for a fish script
 ```
 
-A `.portly.json` at a project's git root can declare a `"commands"` map for `portly workspace`:
+A `.portly.json` at a project's git root can declare a `"commands"` map for `portly workspace`. Each entry is a command string, or an object that also names its port and what it depends on. `workspace up` then waits for a dependency to be listening before starting the services that need it (`--timeout <s>`, default 60):
 
 ```json
 {
-  "commands": { "web": "npm run dev", "api": "uvicorn app:app --reload" },
-  "expects": [3000, 8000]
+  "commands": {
+    "db":  { "run": "postgres -D .data", "port": 5432 },
+    "api": { "run": "uvicorn app:app --reload", "port": 8000, "dependsOn": ["db"] },
+    "web": { "run": "npm run dev", "port": 3000, "dependsOn": ["api"] }
+  }
 }
+```
+
+Output from everything `workspace up` (or the app's restart/relaunch) starts goes to `~/Library/Logs/Portly/<project>-<name>.log`.
+
+## URL scheme
+
+`portly://` links drive the running app, which makes Raycast/Alfred/Shortcuts integrations a one-liner:
+
+```bash
+open portly://show?search=vite   # open the panel, filtered
+open portly://open/3000          # open localhost:3000 in the browser
+open portly://restart/3000       # restart (asks first, unless trusted in Settings)
+open portly://kill/3000          # also: force-kill, pin, unpin, copy
 ```
 
 Homebrew installs the `portly` command automatically. For manual installs, symlink it once:

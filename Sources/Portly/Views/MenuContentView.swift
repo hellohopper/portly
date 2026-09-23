@@ -65,12 +65,7 @@ struct MenuContentView: View {
                     ScrollViewReader { proxy in
                         ScrollView {
                             ForEach(sections) { section in
-                                Text(section.title.uppercased())
-                                    .font(.caption2.bold())
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.top, 8)
-                                    .padding(.bottom, 2)
+                                sectionHeader(section)
 
                                 ForEach(section.ports) { port in
                                     PortRow(
@@ -145,6 +140,37 @@ struct MenuContentView: View {
         .onAppear { installKeyMonitor() }
         .onDisappear { removeKeyMonitor() }
         .onChange(of: store.searchFocusRequestID) { _ in isSearchFocused = true }
+        .onChange(of: store.pendingSearch) { _ in
+            if let search = store.consumePendingSearch() { searchText = search }
+        }
+    }
+
+    /// Project sections get "restart all" / "stop all": a project's servers usually
+    /// come and go together, and doing it row by row is the tedious part.
+    private func sectionHeader(_ section: PortGrouping.Section) -> some View {
+        HStack(spacing: 8) {
+            Text(section.title.uppercased())
+                .font(.caption2.bold())
+                .foregroundStyle(.secondary)
+            Spacer()
+            if section.isProject && !isSelecting {
+                Button(action: { store.restartAll(section.ports) }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .help("Restart all of \(section.title)")
+                Button(action: { store.kill(section.ports) }) {
+                    Image(systemName: "stop.fill")
+                        .font(.caption2)
+                }
+                .buttonStyle(.borderless)
+                .help("Stop all of \(section.title)")
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.top, 8)
+        .padding(.bottom, 2)
     }
 
     // MARK: - Keyboard navigation

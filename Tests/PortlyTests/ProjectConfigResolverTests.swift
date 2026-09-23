@@ -104,4 +104,21 @@ struct ProjectConfigResolverTests {
         try fm.setAttributes([.modificationDate: Date().addingTimeInterval(2)], ofItemAtPath: configURL.path)
         #expect(resolver.labels(fromDirectory: root.path) == [3000: "renamed"])
     }
+
+    @Test func parsesServiceObjectsWithPortAndDependencies() {
+        let config = ProjectConfigResolver.parse(json(#"""
+        {"commands": {
+            "db": "postgres -D data",
+            "api": {"run": "uvicorn app:app", "port": 8000, "dependsOn": ["db"]},
+            "web": {"run": "npm run dev", "port": "3000", "dependsOn": "api"},
+            "broken": {"port": 9000}
+        }}
+        """#))
+        #expect(config.services["db"] == ProjectConfigResolver.Service(command: "postgres -D data"))
+        #expect(config.services["api"] == ProjectConfigResolver.Service(command: "uvicorn app:app", port: 8000, dependsOn: ["db"]))
+        #expect(config.services["web"] == ProjectConfigResolver.Service(command: "npm run dev", port: 3000, dependsOn: ["api"]))
+        #expect(config.services["broken"] == nil)
+        // A declared service port is an expected port too, for status/down/conflicts.
+        #expect(config.expectedPorts == [8000, 3000])
+    }
 }

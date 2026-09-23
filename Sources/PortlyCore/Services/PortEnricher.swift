@@ -120,6 +120,7 @@ public enum PortEnricher {
             info.uptimeSeconds = uptimes[info.pid]
             info.cpuPercent = metrics[info.pid]?.cpuPercent
             info.memPercent = metrics[info.pid]?.memPercent
+            info.residentBytes = metrics[info.pid]?.residentBytes
 
             if options.includeThroughput {
                 if let throughput = NetworkThroughputResolver.shared.throughput(for: info.pid) {

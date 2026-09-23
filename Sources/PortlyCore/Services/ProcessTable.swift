@@ -15,6 +15,25 @@ public struct ProcessTable: Sendable {
         public let uptimeSeconds: Int?
         public let cpuPercent: Double?
         public let memPercent: Double?
+        /// Resident memory in bytes -- the absolute number behind %MEM, for spotting
+        /// growth that a rounded percentage hides.
+        public let residentBytes: UInt64?
+
+        public init(
+            ppid: Int32,
+            name: String,
+            uptimeSeconds: Int?,
+            cpuPercent: Double?,
+            memPercent: Double?,
+            residentBytes: UInt64? = nil
+        ) {
+            self.ppid = ppid
+            self.name = name
+            self.uptimeSeconds = uptimeSeconds
+            self.cpuPercent = cpuPercent
+            self.memPercent = memPercent
+            self.residentBytes = residentBytes
+        }
     }
 
     public private(set) var entries: [Int32: Entry]
@@ -29,7 +48,7 @@ public struct ProcessTable: Sendable {
 
     public static func snapshot() -> ProcessTable {
         let takenAt = ProcessInfo.processInfo.systemUptime
-        guard let output = Shell.run("/bin/ps", ["-axo", "pid=,ppid=,etime=,pcpu=,pmem=,comm="]) else {
+        guard let output = Shell.run("/bin/ps", ["-axo", "pid=,ppid=,etime=,pcpu=,pmem=,rss=,comm="]) else {
             return ProcessTable(entries: [:], takenAtSystemUptime: takenAt)
         }
         return ProcessTable(entries: parse(output), takenAtSystemUptime: takenAt)
@@ -47,16 +66,17 @@ public struct ProcessTable: Sendable {
         var table: [Int32: Entry] = [:]
         for line in output.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // "<pid> <ppid> <etime> <pcpu> <pmem> <command path>" -- only the trailing
-            // path may contain spaces, so cap the split at 5.
-            let parts = trimmed.split(separator: " ", maxSplits: 5, omittingEmptySubsequences: true)
-            guard parts.count == 6, let pid = Int32(parts[0]), let ppid = Int32(parts[1]) else { continue }
+            // "<pid> <ppid> <etime> <pcpu> <pmem> <rss KB> <command path>" -- only the
+            // trailing path may contain spaces, so cap the split at 6.
+            let parts = trimmed.split(separator: " ", maxSplits: 6, omittingEmptySubsequences: true)
+            guard parts.count == 7, let pid = Int32(parts[0]), let ppid = Int32(parts[1]) else { continue }
             table[pid] = Entry(
                 ppid: ppid,
-                name: URL(fileURLWithPath: String(parts[5])).lastPathComponent,
+                name: URL(fileURLWithPath: String(parts[6])).lastPathComponent,
                 uptimeSeconds: UptimeResolver.parseElapsed(String(parts[2])),
                 cpuPercent: Double(parts[3]),
-                memPercent: Double(parts[4])
+                memPercent: Double(parts[4]),
+                residentBytes: UInt64(parts[5]).map { $0 * 1024 }
             )
         }
         return table
@@ -76,7 +96,9 @@ public struct ProcessTable: Sendable {
         var result: [Int32: ProcessMetricsResolver.Metrics] = [:]
         for pid in pids {
             guard let entry = entries[pid], let cpu = entry.cpuPercent, let mem = entry.memPercent else { continue }
-            result[pid] = ProcessMetricsResolver.Metrics(cpuPercent: cpu, memPercent: mem)
+            result[pid] = ProcessMetricsResolver.Metrics(
+                cpuPercent: cpu, memPercent: mem, residentBytes: entry.residentBytes
+            )
         }
         return result
     }

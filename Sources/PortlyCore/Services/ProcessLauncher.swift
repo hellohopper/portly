@@ -15,8 +15,8 @@ public enum ProcessLauncher {
     }
 
     @discardableResult
-    public static func launch(commandLine: String, workingDirectory: String?) -> Bool {
-        launchProcess(commandLine: commandLine, workingDirectory: workingDirectory) != nil
+    public static func launch(commandLine: String, workingDirectory: String?, logName: String? = nil) -> Bool {
+        launchProcess(commandLine: commandLine, workingDirectory: workingDirectory, logName: logName) != nil
     }
 
     /// Resolves argv[0] against the user's real PATH (see `ExecutableResolver`) and
@@ -27,15 +27,25 @@ public enum ProcessLauncher {
     ///
     /// Spawned with only stdio inherited (see `Spawner`): a dev server outlives
     /// Portly, and must not keep Portly's pipes and sockets open for its lifetime.
+    ///
+    /// With a `logName`, stdout and stderr go to `LaunchLog.url(for: logName)`;
+    /// without one the child shares the caller's.
     @discardableResult
     public static func launchProcess(
         commandLine: String,
-        workingDirectory: String?
+        workingDirectory: String?,
+        logName: String? = nil
     ) -> pid_t? {
         let argv = argv(from: commandLine)
         guard let name = argv.first, let executable = ExecutableResolver.resolve(name) else { return nil }
 
         let directory = workingDirectory.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
+        let log = logName.flatMap {
+            LaunchLog.open(name: $0, commandLine: commandLine, workingDirectory: directory)
+        }
+        // The child gets its own copy of the descriptor; ours only has to outlive the spawn.
+        defer { try? log?.close() }
+        let output = log?.fileDescriptor
         return try? Spawner.spawn(
             executable: executable,
             arguments: Array(argv.dropFirst()),
@@ -44,8 +54,8 @@ public enum ProcessLauncher {
                 prepending: (executable as NSString).deletingLastPathComponent
             ),
             workingDirectory: directory,
-            stdout: STDOUT_FILENO,
-            stderr: STDERR_FILENO
+            stdout: output ?? STDOUT_FILENO,
+            stderr: output ?? STDERR_FILENO
         )
     }
 }

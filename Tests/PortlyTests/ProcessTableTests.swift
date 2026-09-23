@@ -4,7 +4,7 @@ import Testing
 struct ProcessTableTests {
 
     @Test func parsesAllColumns() {
-        let output = "  501     1       03:20  12.5  1.8 /usr/local/bin/node"
+        let output = "  501     1       03:20  12.5  1.8  20480 /usr/local/bin/node"
         let table = ProcessTable.parse(output)
         let entry = table[501]
         #expect(entry?.ppid == 1)
@@ -12,10 +12,11 @@ struct ProcessTableTests {
         #expect(entry?.uptimeSeconds == 200)
         #expect(entry?.cpuPercent == 12.5)
         #expect(entry?.memPercent == 1.8)
+        #expect(entry?.residentBytes == 20_971_520)
     }
 
     @Test func keepsPathsContainingSpaces() {
-        let output = "700 1 01:00 0.0 0.0 /Applications/My App.app/Contents/MacOS/My App"
+        let output = "700 1 01:00 0.0 0.0 1024 /Applications/My App.app/Contents/MacOS/My App"
         #expect(ProcessTable.parse(output)[700]?.name == "My App")
     }
 

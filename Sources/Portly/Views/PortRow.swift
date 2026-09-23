@@ -22,6 +22,7 @@ struct PortRow: View {
     private var tunnelState: TunnelManager.State? { tunnelManager.tunnels[info.port] }
 
     private func onKill() { store.kill(info) }
+    private func onForceKill() { store.forceKill(info) }
     private func onKillTree() { store.killTree(info) }
     private func onTogglePin() { store.togglePin(info.port) }
     private func onRestart() { store.restart(info) }
@@ -41,6 +42,8 @@ struct PortRow: View {
     @State private var showsNoLogAlert = false
     @State private var isShowingProxyLog = false
     @State private var proxyLogEntries: [ProxyRequestLog.Entry] = []
+    @State private var logPath: String?
+    @State private var isShowingLog = false
 
     var body: some View {
         HStack {
@@ -172,6 +175,12 @@ struct PortRow: View {
                                 .frame(width: 40, height: 12)
                                 .help("Network throughput, last ~40s")
                         }
+                        if info.memoryHistory.count >= 2 {
+                            let growing = MemoryTrend.isGrowing(info.memoryHistory)
+                            Sparkline(samples: info.memoryHistory, color: growing ? .orange : .secondary, scaling: .range)
+                                .frame(width: 40, height: 12)
+                                .help(memoryTooltip(growing: growing))
+                        }
                     }
                 }
             }
@@ -208,11 +217,14 @@ struct PortRow: View {
                     copyToPasteboard("docker logs -f \(containerName)")
                 }
             } else {
-                Button("Open log file") { openLogFile() }
+                Button("Show log") { showLog() }
             }
             if !info.ancestry.isEmpty {
                 Button("Kill process tree (\(ProcessTreeResolver.describe(leafName: info.processName, ancestry: info.ancestry)))",
                        role: .destructive, action: onKillTree)
+            }
+            if !info.isDockerManaged {
+                Button("Force kill (SIGKILL)", role: .destructive, action: onForceKill)
             }
             Button("Ignore \(info.processName)", action: onIgnore)
         }
@@ -222,6 +234,11 @@ struct PortRow: View {
         .popover(isPresented: $isShowingProxyLog) {
             if let proxyName {
                 ProxyRequestLogPopover(name: proxyName, entries: proxyLogEntries)
+            }
+        }
+        .popover(isPresented: $isShowingLog) {
+            if let logPath {
+                LogTailPopover(path: logPath)
             }
         }
         .alert("No log file found", isPresented: $showsNoLogAlert) {
@@ -268,7 +285,7 @@ struct PortRow: View {
         }
     }
 
-    private func openLogFile() {
+    private func showLog() {
         let pid = info.pid
         let workingDirectory = info.workingDirectory
         Task {
@@ -279,8 +296,20 @@ struct PortRow: View {
                 showsNoLogAlert = true
                 return
             }
-            NSWorkspace.shared.open(URL(fileURLWithPath: path))
+            logPath = path
+            isShowingLog = true
         }
+    }
+
+    private func memoryTooltip(growing: Bool) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .memory
+        let samples = info.memoryHistory
+        guard let first = samples.first, let last = samples.last else { return "Memory" }
+        let range = "\(formatter.string(fromByteCount: Int64(first))) → \(formatter.string(fromByteCount: Int64(last)))"
+        return growing
+            ? "Memory keeps growing (\(range)) — possible leak"
+            : "Memory, recent samples (\(range))"
     }
 
     private func beginEditingLabel() {
@@ -352,6 +381,9 @@ struct PortRow: View {
     private var secondaryLine: String? {
         guard let cpuPercent = info.cpuPercent, let memPercent = info.memPercent else { return nil }
         var line = String(format: "CPU %.0f%% · MEM %.0f%%", cpuPercent, memPercent)
+        if let residentBytes = info.residentBytes {
+            line += " (\(ByteCountFormatter.string(fromByteCount: Int64(residentBytes), countStyle: .memory)))"
+        }
         if let bytesIn = info.bytesInPerSecond, let bytesOut = info.bytesOutPerSecond, bytesIn + bytesOut > 0 {
             line += " · ↓\(ByteRateFormatter.format(bytesPerSecond: bytesIn)) ↑\(ByteRateFormatter.format(bytesPerSecond: bytesOut))"
         }

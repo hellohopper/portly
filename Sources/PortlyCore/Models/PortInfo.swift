@@ -14,6 +14,10 @@ public struct PortInfo: Identifiable, Hashable, Sendable {
     public var uptimeSeconds: Int?
     public var cpuPercent: Double?
     public var memPercent: Double?
+    /// Resident memory in bytes.
+    public var residentBytes: UInt64?
+    /// Recent resident-memory samples (bytes), oldest first, for a trend sparkline.
+    public var memoryHistory: [Double] = []
     public var frameworkLabel: String?
     public var commandLine: String?
     public var workingDirectory: String?
