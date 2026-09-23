@@ -15,9 +15,12 @@ jobs:
   build-and-release:
     runs-on: macos-15
     env:
+      # Either credential works for the tap bump below. The deploy key is preferred:
+      # it can write to hellohopper/homebrew-portly and nothing else.
+      HOMEBREW_TAP_DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Select Xcode 16.4
         uses: maxim-lobanov/setup-xcode@v1
@@ -35,7 +38,7 @@ jobs:
           echo "$SUM  Portly.dmg" > .build/Portly.dmg.sha256
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: |
             .build/Portly.dmg
@@ -46,16 +49,26 @@ jobs:
 
             **SHA-256**: `${{ steps.checksum.outputs.sha256 }}`
 
-      # Requires a `HOMEBREW_TAP_TOKEN` repo secret: a PAT (classic, `repo` scope,
-      # or fine-grained with contents:write) for hellohopper/homebrew-portly.
-      # Skipped on workflow_dispatch (draft) releases and if the secret isn't set.
+      # Needs one of two repo secrets:
+      #   HOMEBREW_TAP_DEPLOY_KEY -- private half of a write-enabled deploy key on
+      #     hellohopper/homebrew-portly (preferred: scoped to that one repo), or
+      #   HOMEBREW_TAP_TOKEN -- a PAT with contents:write on it.
+      # Skipped on workflow_dispatch (draft) releases and when neither is set.
       - name: Bump hellohopper/homebrew-portly
-        if: github.event_name != 'workflow_dispatch' && env.HOMEBREW_TAP_TOKEN != ''
+        if: github.event_name != 'workflow_dispatch' && (env.HOMEBREW_TAP_DEPLOY_KEY != '' || env.HOMEBREW_TAP_TOKEN != '')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           SHA="${{ steps.checksum.outputs.sha256 }}"
 
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/hellohopper/homebrew-portly.git" tap
+          if [ -n "${HOMEBREW_TAP_DEPLOY_KEY}" ]; then
+            KEY_FILE="${RUNNER_TEMP}/tap_deploy_key"
+            printf '%s\n' "${HOMEBREW_TAP_DEPLOY_KEY}" > "${KEY_FILE}"
+            chmod 600 "${KEY_FILE}"
+            export GIT_SSH_COMMAND="ssh -i ${KEY_FILE} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+            git clone git@github.com:hellohopper/homebrew-portly.git tap
+          else
+            git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/hellohopper/homebrew-portly.git" tap
+          fi
           cd tap
           sed -i '' -E "s/^  version \".*\"/  version \"${VERSION}\"/" Casks/portly.rb
           sed -i '' -E "s/^  sha256 \".*\"/  sha256 \"${SHA}\"/" Casks/portly.rb
@@ -63,5 +76,7 @@ jobs:
           git config user.name "portly-release-bot"
           git config user.email "actions@users.noreply.github.com"
           git add Casks/portly.rb
+          # Re-running a release whose bump already landed is not an error.
+          git diff --cached --quiet && { echo "Tap already at v${VERSION}"; exit 0; }
           git commit -m "Bump Portly to v${VERSION}"
           git push

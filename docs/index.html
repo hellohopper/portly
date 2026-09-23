@@ -85,8 +85,8 @@
       </div>
       <div class="feature-card">
         <div class="feature-icon">🔔</div>
-        <h3>Notifications</h3>
-        <p>Get alerted the moment a new port starts listening, or a pinned port stops unexpectedly.</p>
+        <h3>Notifications you can act on</h3>
+        <p>Get alerted when a port starts listening, a pinned one dies or starts failing, or one goes idle — and relaunch, restart, kill or open it straight from the notification.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🐳</div>
@@ -106,7 +106,7 @@
       <div class="feature-card">
         <div class="feature-icon">🔁</div>
         <h3>Quick restart</h3>
-        <p>Kill and relaunch a dev server with its exact command line and working directory — one click, no retyping.</p>
+        <p>Kill and relaunch a dev server with its exact command line and working directory. Portly waits for the old process to let go of the port first, so the new one never hits "address already in use".</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">✎</div>
@@ -116,7 +116,7 @@
       <div class="feature-card">
         <div class="feature-icon">⬇</div>
         <h3>One-click updates</h3>
-        <p>When a new version ships, click Download &amp; Install — Portly fetches it, swaps itself in place, and relaunches.</p>
+        <p>When a new version ships, click Download &amp; Install — Portly verifies the download's checksum and code signature, swaps itself in place, and relaunches.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">✓</div>
@@ -146,7 +146,7 @@
       <div class="feature-card">
         <div class="feature-icon">▮</div>
         <h3>CLI companion</h3>
-        <p><code>portly list</code> and <code>portly kill 3000</code> from your terminal, sharing the app's smarts. Installed automatically via Homebrew.</p>
+        <p><code>portly list</code>, <code>kill</code>, <code>restart</code>, <code>logs -f</code>, <code>wait</code>, <code>free</code> and <code>run</code> from your terminal, sharing the app's smarts. Installed automatically via Homebrew, with zsh and fish completions.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">🌐</div>
@@ -203,12 +203,67 @@
         <h3>Relaunch from history</h3>
         <p>Closed ports keep their command line, so a killed server can be started again with one click.</p>
       </div>
+      <div class="feature-card">
+        <div class="feature-icon">🛑</div>
+        <h3>Force kill</h3>
+        <p>A server that ignores SIGTERM doesn't just quietly stay up: Portly notices after five seconds and offers to SIGKILL it. Also <code>portly kill --force</code>.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📜</div>
+        <h3>Server logs</h3>
+        <p>Anything Portly starts writes its output to a log you can tail live from the port's row — or with <code>portly logs 3000 -f</code>. Docker ports get their <code>docker logs</code> command.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗂</div>
+        <h3>Project workspaces</h3>
+        <p>Declare a project's services in <code>.portly.json</code> and <code>portly workspace up</code> starts them in dependency order, waiting for each one's port. Or restart and stop a whole project from its header.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>Share via tunnel</h3>
+        <p>Expose a local port over the internet with a Cloudflare quick tunnel — no account, no config, just <code>cloudflared</code>.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>Request log</h3>
+        <p>See every request the <code>.localhost</code> proxy forwards to a port — method, path and time, keep-alive connections included.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📈</div>
+        <h3>Traffic &amp; memory trends</h3>
+        <p>Sparklines for network throughput and resident memory. The memory line turns orange when it keeps climbing — the slow leak a single reading hides.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🟢</div>
+        <h3>Menu bar at a glance</h3>
+        <p>Optional pinned-port health glyph and total CPU/memory right next to the icon, without opening the panel.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🚀</div>
+        <h3>Links &amp; Raycast</h3>
+        <p><code>portly://open/3000</code>, <code>restart</code>, <code>kill</code> and more drive the app from launchers and scripts. A ready-made Raycast extension ships in the repo.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🖥</div>
+        <h3>Remote machines</h3>
+        <p><code>portly remote devbox kill 3000</code> runs any command on another Mac over ssh.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>Never "address in use"</h3>
+        <p><code>portly run -- npm run dev</code> sets <code>$PORT</code> to a free port — your preferred one when it's available — before starting the command.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🗄</div>
+        <h3>Database health</h3>
+        <p>Postgres, Redis, MySQL and MongoDB never answer HTTP, so they get a TCP handshake probe and a <code>TCP</code> badge instead of a permanent red one.</p>
+      </div>
     </div>
   </section>
 
   <section class="download-section" id="download-section">
     <h2>Get Portly</h2>
-    <p>Install via Homebrew, grab the signed DMG from GitHub Releases, or build it yourself from source.</p>
+    <p>Install via Homebrew, grab the DMG from GitHub Releases, or build it yourself from source.</p>
     <pre class="install-command"><code>brew tap hellohopper/portly
 brew install --cask portly</code></pre>
     <div class="cta-row">
