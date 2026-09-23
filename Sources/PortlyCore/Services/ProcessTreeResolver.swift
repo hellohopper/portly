@@ -32,10 +32,9 @@ public enum ProcessTreeResolver {
         return boundaryPrefixes.contains { name.hasPrefix($0) }
     }
 
-    /// Builds a pid -> (ppid, executable name) table from one `ps` call.
+    /// A pid -> (ppid, executable name) table for the whole system.
     public static func snapshot() -> [Int32: (ppid: Int32, name: String)] {
-        guard let output = Shell.run("/bin/ps", ["-axo", "pid=,ppid=,comm="]) else { return [:] }
-        return parseTable(output)
+        ProcessTable.snapshot().ancestryTable
     }
 
     static func parseTable(_ output: String) -> [Int32: (ppid: Int32, name: String)] {

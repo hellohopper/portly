@@ -136,7 +136,12 @@ public enum PortEnricher {
                 )
             }
             if options.includeAncestry {
-                info.ancestry = ProcessTreeResolver.ancestry(of: info.pid, in: ancestryTable)
+                // Boundaries are judged on kernel names ("zsh", not a login shell's
+                // "-zsh"); what's *shown* is argv[0], as ps did -- "npm run dev",
+                // not the "node" binary behind it.
+                info.ancestry = ProcessTreeResolver.ancestry(of: info.pid, in: ancestryTable).map {
+                    ProcessTreeResolver.Entry(pid: $0.pid, name: ProcessArguments.displayName(of: $0.pid) ?? $0.name)
+                }
             }
             enriched.append(info)
         }
