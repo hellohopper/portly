@@ -6,10 +6,12 @@ enum CLICommand: Equatable {
     case watch
     case wait(port: Int, timeout: Int)
     case free
-    case kill(port: Int, tree: Bool)
+    case kill(port: Int, tree: Bool, force: Bool = false)
+    case logs(port: Int, follow: Bool)
     case restart(port: Int)
     case run(port: Int?, command: [String])
-    case workspace(WorkspaceAction)
+    /// `timeout` bounds how long `up` waits for a dependency's port.
+    case workspace(WorkspaceAction, timeout: Int = defaultWaitTimeout)
     case remote(host: String, args: [String])
     case completions(ShellKind)
     case version
@@ -50,10 +52,16 @@ enum CLICommand: Equatable {
             return .wait(port: port, timeout: timeout)
         case "kill":
             guard arguments.count >= 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
+            let flags = Array(arguments.dropFirst(2))
+            let known: Set<String> = ["--tree", "--force"]
+            guard Set(flags).count == flags.count, flags.allSatisfy(known.contains) else { return nil }
+            return .kill(port: port, tree: flags.contains("--tree"), force: flags.contains("--force"))
+        case "logs":
+            guard arguments.count >= 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
             let rest = Array(arguments.dropFirst(2))
-            if rest.isEmpty { return .kill(port: port, tree: false) }
-            guard rest == ["--tree"] else { return nil }
-            return .kill(port: port, tree: true)
+            if rest.isEmpty { return .logs(port: port, follow: false) }
+            guard rest == ["-f"] || rest == ["--follow"] else { return nil }
+            return .logs(port: port, follow: true)
         case "restart":
             guard arguments.count == 2, let port = Int(arguments[1]), (1...65535).contains(port) else { return nil }
             return .restart(port: port)
@@ -71,8 +79,12 @@ enum CLICommand: Equatable {
             guard !command.isEmpty else { return nil }
             return .run(port: port, command: command)
         case "workspace":
-            guard arguments.count == 2, let action = WorkspaceAction(rawValue: arguments[1]) else { return nil }
-            return .workspace(action)
+            guard arguments.count >= 2, let action = WorkspaceAction(rawValue: arguments[1]) else { return nil }
+            let rest = Array(arguments.dropFirst(2))
+            if rest.isEmpty { return .workspace(action) }
+            guard action == .up, rest.count == 2, rest[0] == "--timeout",
+                  let timeout = Int(rest[1]), timeout > 0 else { return nil }
+            return .workspace(action, timeout: timeout)
         case "remote":
             guard arguments.count >= 2, !arguments[1].isEmpty else { return nil }
             let host = arguments[1]
@@ -102,14 +114,21 @@ enum CLICommand: Equatable {
       wait <port>      Block until something is listening on <port>
                        (--timeout <seconds>, default 60; exits 1 on timeout)
       free             Print an unused port from the common dev ranges
-      kill <port>      SIGTERM the process listening on <port>
-                       (--tree also kills its wrapper processes, e.g. npm -> node)
-      restart <port>   Kill and relaunch it with the same command line
+      kill <port>      SIGTERM the process listening on <port> and wait up to 3s for
+                       it to exit (--tree also kills its wrapper processes, e.g.
+                       npm -> node; --force SIGKILLs whatever ignores the SIGTERM)
+      logs <port>      Print the tail of the log file the process on <port> writes
+                       to (-f to follow)
+      restart <port>   Kill and relaunch it with the same command line (output goes
+                       to ~/Library/Logs/Portly/)
       run -- <cmd>     Run <cmd> with $PORT set to a free port (avoids "already in
                        use" errors); --port <n> requests a specific one, falling
                        back to another free port if <n> is taken
       workspace up     Start every command .portly.json declares under "commands",
-                       in the current project (a mini Procfile)
+                       in the current project (a mini Procfile). Services that
+                       declare a "port" and are listed in another's "dependsOn"
+                       are waited for first (--timeout <seconds>, default 60).
+                       Output goes to ~/Library/Logs/Portly/
       workspace down   Kill whatever is listening on this project's declared/expected
                        ports
       workspace status Show each declared port's up/down state
@@ -123,7 +142,8 @@ enum CLICommand: Equatable {
 
     EXIT CODES:
       0  success
-      1  the requested port had no listener / wait timed out
+      1  the requested port had no listener / wait timed out / the process
+         didn't exit
       64 usage error
     """
 }

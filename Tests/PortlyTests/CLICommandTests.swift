@@ -112,4 +112,26 @@ struct CLICommandTests {
         #expect(CLICommand.parse(["completions", "bash"]) == nil)
         #expect(CLICommand.parse(["completions"]) == nil)
     }
+
+    @Test func parsesKillFlagsInAnyOrder() {
+        #expect(CLICommand.parse(["kill", "3000", "--force"]) == .kill(port: 3000, tree: false, force: true))
+        #expect(CLICommand.parse(["kill", "3000", "--force", "--tree"]) == .kill(port: 3000, tree: true, force: true))
+        #expect(CLICommand.parse(["kill", "3000", "--tree"]) == .kill(port: 3000, tree: true, force: false))
+        #expect(CLICommand.parse(["kill", "3000", "--force", "--force"]) == nil)
+    }
+
+    @Test func parsesLogs() {
+        #expect(CLICommand.parse(["logs", "3000"]) == .logs(port: 3000, follow: false))
+        #expect(CLICommand.parse(["logs", "3000", "-f"]) == .logs(port: 3000, follow: true))
+        #expect(CLICommand.parse(["logs", "3000", "--follow"]) == .logs(port: 3000, follow: true))
+        #expect(CLICommand.parse(["logs"]) == nil)
+        #expect(CLICommand.parse(["logs", "3000", "-x"]) == nil)
+    }
+
+    @Test func parsesWorkspaceUpTimeout() {
+        #expect(CLICommand.parse(["workspace", "up", "--timeout", "30"]) == .workspace(.up, timeout: 30))
+        #expect(CLICommand.parse(["workspace", "up"]) == .workspace(.up, timeout: CLICommand.defaultWaitTimeout))
+        #expect(CLICommand.parse(["workspace", "down", "--timeout", "30"]) == nil)
+        #expect(CLICommand.parse(["workspace", "up", "--timeout", "0"]) == nil)
+    }
 }

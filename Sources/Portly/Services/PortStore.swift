@@ -146,6 +146,7 @@ final class PortStore: ObservableObject {
 
                 self.projectContextCache = newContexts
 
+                let allEnriched = self.attachMemoryHistory(allEnriched)
                 let finalEnriched = allEnriched.filter {
                     !self.ignoredProcessNames.contains($0.processName.lowercased())
                 }
@@ -192,6 +193,25 @@ final class PortStore: ObservableObject {
                 self.syncProxyRoutes()
                 self.trackIdlePorts(finalEnriched)
             }
+        }
+    }
+
+    // MARK: - Memory trend
+
+    private var memoryTrend = MemoryTrend()
+
+    /// Records this scan's resident memory per process and hands each row its
+    /// history, so a slowly leaking dev server shows as a rising line.
+    private func attachMemoryHistory(_ ports: [PortInfo]) -> [PortInfo] {
+        var readings: [Int32: UInt64] = [:]
+        for info in ports {
+            if let bytes = info.residentBytes { readings[info.pid] = bytes }
+        }
+        memoryTrend.record(readings)
+        return ports.map { info in
+            var info = info
+            info.memoryHistory = memoryTrend.history(for: info.pid)
+            return info
         }
     }
 
@@ -382,6 +402,7 @@ final class PortStore: ObservableObject {
         }
 
         terminate(native.map(\.pid))
+        watchForStalledExit(native)
 
         guard !containerised.isEmpty else { return }
         Task {
@@ -396,6 +417,43 @@ final class PortStore: ObservableObject {
     /// that spawned the `node` server), outermost first so nothing respawns the leaf.
     func killTree(_ info: PortInfo) {
         terminate(info.ancestry.reversed().map(\.pid) + [info.pid])
+        watchForStalledExit([info])
+    }
+
+    /// SIGKILL, for a process that ignored SIGTERM. Docker rows still go through the
+    /// daemon -- SIGKILLing the shared forwarder is even worse than SIGTERMing it.
+    func forceKill(_ info: PortInfo) {
+        if info.isDockerManaged {
+            kill(info)
+            return
+        }
+        Darwin.kill(info.pid, SIGKILL)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.refresh()
+        }
+    }
+
+    /// Five seconds after a SIGTERM, anything still alive gets a notification
+    /// offering a force kill -- otherwise a wedged server just silently stays put
+    /// and the row keeps reappearing.
+    private func watchForStalledExit(_ infos: [PortInfo]) {
+        let byPid = Dictionary(infos.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        guard !byPid.isEmpty else { return }
+        Task {
+            if await ProcessTerminator.waitForExit(Array(byPid.keys), timeout: 5) { return }
+            for (pid, info) in byPid where ProcessTerminator.isAlive(pid) {
+                NotificationManager.notifyKillStalled(info)
+            }
+        }
+    }
+
+    /// Restarts every distinct process among `infos` -- a project's "Restart all".
+    /// One server listening on two ports is still one restart.
+    func restartAll(_ infos: [PortInfo]) {
+        var seen = Set<Int32>()
+        for info in infos where seen.insert(info.pid).inserted {
+            restart(info)
+        }
     }
 
     private func terminate(_ pids: [Int32]) {
@@ -432,7 +490,10 @@ final class PortStore: ObservableObject {
                 refresh()
                 return
             }
-            if !ProcessLauncher.launch(commandLine: commandLine, workingDirectory: workingDirectory) {
+            let logName = NotificationManager.launchLogName(
+                project: info.projectName, process: info.processName, port: info.port
+            )
+            if !ProcessLauncher.launch(commandLine: commandLine, workingDirectory: workingDirectory, logName: logName) {
                 NotificationManager.notifyLaunchFailed(commandLine: commandLine)
             }
             try? await Task.sleep(nanoseconds: 500_000_000)
@@ -446,7 +507,11 @@ final class PortStore: ObservableObject {
     func relaunch(_ event: HistoryStore.Event) -> Bool {
         guard let commandLine = event.commandLine else { return false }
         let launched = ProcessLauncher.launch(
-            commandLine: commandLine, workingDirectory: event.workingDirectory
+            commandLine: commandLine,
+            workingDirectory: event.workingDirectory,
+            logName: NotificationManager.launchLogName(
+                project: event.projectName, process: event.processName, port: event.port
+            )
         )
         if launched {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
@@ -549,6 +614,107 @@ final class PortStore: ObservableObject {
         LocalhostProxyServer.shared.updateRoutes(
             LocalhostProxyServer.routes(names: proxyNames, livePorts: ports)
         )
+    }
+
+    // MARK: - Notification actions
+
+    func perform(_ action: NotificationAction) {
+        switch action {
+        case .openInBrowser(let port):
+            openInBrowser(port: port)
+        case .kill(let ref):
+            if let info = liveProcess(ref) { kill(info) }
+        case .forceKill(let ref):
+            if let info = liveProcess(ref) { forceKill(info) }
+        case .restart(let ref):
+            if let info = liveProcess(ref) { restart(info) }
+        case .relaunch(let commandLine, let workingDirectory, let logName):
+            // A relaunch into a port something else has since claimed would just fail.
+            if ProcessLauncher.launch(commandLine: commandLine, workingDirectory: workingDirectory, logName: logName) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                    self?.refresh()
+                }
+            } else {
+                NotificationManager.notifyLaunchFailed(commandLine: commandLine)
+            }
+        }
+    }
+
+    /// The row a notification referred to, if that exact process is still running.
+    /// A reused pid (different start time) is a different process and is left alone.
+    private func liveProcess(_ ref: ProcessRef) -> PortInfo? {
+        if let startTime = ref.startTime, !ProcessTerminator.isSameProcess(ref.pid, startedAt: startTime) {
+            return nil
+        }
+        return unfilteredPorts.first { $0.pid == ref.pid && $0.port == ref.port }
+    }
+
+    func openInBrowser(port: Int) {
+        guard let url = URL(string: "http://localhost:\(port)") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    // MARK: - portly:// links
+
+    /// Off by default: any web page can try to open a portly:// link, so killing or
+    /// restarting through one asks first unless the user opted out.
+    @Published var trustsURLSchemeActions: Bool = Defaults.bool(PortStore.trustsURLSchemeDefaultsKey) {
+        didSet {
+            guard trustsURLSchemeActions != oldValue else { return }
+            Defaults.set(trustsURLSchemeActions, for: Self.trustsURLSchemeDefaultsKey)
+        }
+    }
+    static let trustsURLSchemeDefaultsKey = "trustsURLSchemeActions"
+
+    /// Text a `portly://show?search=` link asked the panel to search for.
+    @Published private(set) var pendingSearch: String?
+
+    func consumePendingSearch() -> String? {
+        defer { pendingSearch = nil }
+        return pendingSearch
+    }
+
+    /// Carries out a link that's already been confirmed where needed. Returns false
+    /// when nothing is listening on the port it names.
+    @discardableResult
+    func perform(_ command: PortlyURLCommand) -> Bool {
+        if case .show(let search) = command {
+            pendingSearch = search
+            return true
+        }
+        guard let port = command.port else { return false }
+        // Prefer the TCP listener: that's the one a URL, restart or kill means.
+        let matches = unfilteredPorts.filter { $0.port == port }.sorted { $0.isTCP && !$1.isTCP }
+        switch command {
+        case .show:
+            return true
+        case .open:
+            openInBrowser(port: port)
+            return true
+        case .copy:
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString("http://localhost:\(port)", forType: .string)
+            return true
+        case .pin:
+            if !pinnedPorts.contains(port) { togglePin(port) }
+            return true
+        case .unpin:
+            if pinnedPorts.contains(port) { togglePin(port) }
+            return true
+        case .kill:
+            guard !matches.isEmpty else { return false }
+            kill(matches)
+            return true
+        case .forceKill:
+            guard !matches.isEmpty else { return false }
+            matches.forEach(forceKill)
+            return true
+        case .restart:
+            guard let target = matches.first else { return false }
+            restart(target)
+            return true
+        }
     }
 
     func togglePin(_ port: Int) {

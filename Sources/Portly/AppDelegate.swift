@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import Combine
 import PortlyCore
+import UserNotifications
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
@@ -11,6 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let store = PortStore()
     private let updates = UpdateCoordinator()
     private var cancellables: Set<AnyCancellable> = []
+    private var notificationHandler: NotificationActionHandler?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
@@ -32,6 +34,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
         store.start()
         updates.checkForUpdate()
+        let handler = NotificationActionHandler { [weak self] action in
+            self?.store.perform(action)
+        }
+        UNUserNotificationCenter.current().delegate = handler
+        notificationHandler = handler
         NotificationManager.requestAuthorization()
 
         store.$hasAlert
@@ -119,6 +126,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         store.stop()
         TunnelManager.shared.stopAll()
+    }
+
+    // MARK: - portly:// links
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            guard let command = PortlyURLCommand.parse(url) else { continue }
+            handle(command)
+        }
+    }
+
+    private func handle(_ command: PortlyURLCommand) {
+        if case .show = command {
+            store.perform(command)
+            showPopover()
+            return
+        }
+        if command.isDestructive && !store.trustsURLSchemeActions && !confirm(command) {
+            return
+        }
+        if !store.perform(command), let port = command.port {
+            NSSound.beep()
+            NSLog("Portly: portly:// link for port \(port) ignored -- nothing is listening there")
+        }
+    }
+
+    /// Any web page can try to open a portly:// link; a kill or restart through one
+    /// has to be confirmed by the user unless they turned that off in Settings.
+    private func confirm(_ command: PortlyURLCommand) -> Bool {
+        guard let port = command.port else { return false }
+        let holder = store.ports.first { $0.port == port }
+        let verb: String
+        switch command {
+        case .restart: verb = "Restart"
+        case .forceKill: verb = "Force kill"
+        default: verb = "Kill"
+        }
+        let alert = NSAlert()
+        alert.messageText = "\(verb) port \(port)?"
+        alert.informativeText = holder.map { "A portly:// link asked to \(verb.lowercased()) \($0.processName) (pid \($0.pid))." }
+            ?? "A portly:// link asked to \(verb.lowercased()) whatever is listening on port \(port)."
+        alert.addButton(withTitle: verb)
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func showPopover() {
+        guard let popover, !popover.isShown else {
+            store.requestSearchFocus()
+            return
+        }
+        togglePopover()
     }
 
     func popoverDidClose(_ notification: Notification) {

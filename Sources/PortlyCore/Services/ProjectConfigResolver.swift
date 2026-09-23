@@ -25,22 +25,47 @@ public final class ProjectConfigResolver: @unchecked Sendable {
         public var expectedPorts: Set<Int> = []
         /// Ports served over TLS, so the probe uses https://.
         public var tlsPorts: Set<Int> = []
-        /// Named commands the project declares, e.g. `{"web": "npm run dev", "api":
-        /// "uvicorn app:app --reload"}` -- a mini Procfile so `portly workspace up`
-        /// can start the whole project without everyone remembering (or agreeing on)
-        /// the invocation. Keys are sorted before running, since JSON object order
-        /// isn't guaranteed to survive parsing -- deterministic beats "whatever the
-        /// file happened to say" for something that starts processes.
-        public var commands: [String: String] = [:]
+        /// Named services the project declares -- a mini Procfile so `portly
+        /// workspace up` can start the whole project without everyone remembering (or
+        /// agreeing on) the invocation. Each entry is either a bare command string or
+        /// an object that also names the port it serves and what must be up first:
+        ///
+        ///     "commands": {
+        ///       "db":  "docker compose up postgres",
+        ///       "api": { "run": "uvicorn app:app", "port": 8000, "dependsOn": ["db"] },
+        ///       "web": { "run": "npm run dev", "port": 3000, "dependsOn": ["api"] }
+        ///     }
+        public var services: [String: Service] = [:]
+
+        /// Just the command lines, keyed by service name.
+        public var commands: [String: String] {
+            get { services.mapValues(\.command) }
+            set { services = newValue.mapValues { Service(command: $0) } }
+        }
 
         public init() {}
 
         public var isEmpty: Bool {
-            labels.isEmpty && healthPaths.isEmpty && expectedPorts.isEmpty && tlsPorts.isEmpty && commands.isEmpty
+            labels.isEmpty && healthPaths.isEmpty && expectedPorts.isEmpty && tlsPorts.isEmpty && services.isEmpty
         }
 
         public func healthTarget(for port: Int) -> HealthChecker.Target {
             HealthChecker.Target(path: healthPaths[port] ?? "/", useTLS: tlsPorts.contains(port))
+        }
+    }
+
+    public struct Service: Sendable, Equatable {
+        public var command: String
+        /// The port this service listens on once it's ready, if declared. Dependents
+        /// wait for it before starting.
+        public var port: Int?
+        /// Services that must be listening before this one starts.
+        public var dependsOn: [String]
+
+        public init(command: String, port: Int? = nil, dependsOn: [String] = []) {
+            self.command = command
+            self.port = port
+            self.dependsOn = dependsOn
         }
     }
 
@@ -88,22 +113,49 @@ public final class ProjectConfigResolver: @unchecked Sendable {
         var config = Config()
         config.labels = stringMap(json["labels"])
         config.healthPaths = stringMap(json["health"])
-        config.expectedPorts = Set(config.labels.keys).union(portList(json["expects"]))
+        config.services = services(json["commands"])
+        config.expectedPorts = Set(config.labels.keys)
+            .union(portList(json["expects"]))
+            .union(config.services.values.compactMap(\.port))
         config.tlsPorts = trueKeys(json["https"])
-        config.commands = rawStringMap(json["commands"])
         return config
     }
 
-    /// Like `stringMap`, but keyed by an arbitrary name rather than a port number.
-    private static func rawStringMap(_ raw: Any?) -> [String: String] {
+    /// Accepts `"name": "command"` or `"name": {"run": ..., "port": ..., "dependsOn": [...]}`.
+    private static func services(_ raw: Any?) -> [String: Service] {
         guard let dictionary = raw as? [String: Any] else { return [:] }
-        var result: [String: String] = [:]
+        var result: [String: Service] = [:]
         for (key, value) in dictionary {
             let name = key.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !name.isEmpty, let string = value as? String else { continue }
-            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            result[name] = trimmed
+            guard !name.isEmpty else { continue }
+
+            if let string = value as? String {
+                let command = string.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !command.isEmpty else { continue }
+                result[name] = Service(command: command)
+                continue
+            }
+            guard let object = value as? [String: Any],
+                  let run = (object["run"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !run.isEmpty else { continue }
+            let port: Int? = {
+                if let number = object["port"] as? Int { return (1...65535).contains(number) ? number : nil }
+                if let string = object["port"] as? String { return validPort(string) }
+                return nil
+            }()
+            let dependencies: [String]
+            if let list = object["dependsOn"] as? [String] {
+                dependencies = list
+            } else if let single = object["dependsOn"] as? String {
+                dependencies = [single]
+            } else {
+                dependencies = []
+            }
+            result[name] = Service(
+                command: run,
+                port: port,
+                dependsOn: dependencies.map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
+            )
         }
         return result
     }

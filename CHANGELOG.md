@@ -5,6 +5,15 @@ All notable changes to Portly are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Force kill** — a process still running 5s after SIGTERM gets a notification with a Force Kill button; right-click → "Force kill (SIGKILL)"; `portly kill <port>` now waits for the exit and reports a survivor, and `--force` SIGKILLs it
+- **Captured output** — servers Portly starts (restart, relaunch from history or a notification, `workspace up`) log to `~/Library/Logs/Portly/<name>.log` instead of vanishing; right-click → "Show log" tails the log live in the panel, and `portly logs <port> [-f]` does the same from a terminal
+- **Actionable notifications** — Relaunch (dead pinned port), Restart / Open (failing pinned port), Kill (idle port), Open (new port), Force Kill (stalled kill). Actions check the process's exact start time, so a reused pid is never signalled. Notifications now also show while Portly is the active app
+- **Project group actions** — Restart all / Stop all buttons on each project's section header
+- **`portly://` URL scheme** — `show[?search=]`, `open`, `copy`, `pin`, `unpin`, `kill`, `force-kill`, `restart`; kill/restart links ask for confirmation unless trusted in Settings
+- **Workspace dependencies** — `.portly.json` services may be objects with `run`, `port` and `dependsOn`; `workspace up` starts them in dependency order, waiting for each dependency's port (`--timeout`), skips ones already listening, and rejects unknown dependencies and cycles
+- **Memory trend** — resident memory in MB next to %MEM, and a per-process sparkline that turns orange on sustained growth
+
 ### Fixed
 - **`portly workspace status` crashed** ("Duplicate values for key") whenever several processes shared a port — pre-fork servers like `gunicorn -w 4`, or `SO_REUSEPORT`. All holders are now listed
 - **Restart, relaunch-from-history and tunnels couldn't find Homebrew/nvm tools** when Portly was launched from Finder (launchd's minimal PATH), and reported success anyway because `/usr/bin/env` itself had started. Executables are now resolved against the user's login-shell PATH, the child gets that PATH too (so `#!/usr/bin/env node` shebangs work), and a missing command is reported as a failure with a notification

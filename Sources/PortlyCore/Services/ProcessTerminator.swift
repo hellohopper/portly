@@ -25,6 +25,23 @@ public enum ProcessTerminator {
         return info.pbi_status != UInt32(SZOMB)
     }
 
+    /// When the process started, to the microsecond -- unlike a pid, this can't be
+    /// reused, so a stored (pid, startTime) pair identifies one specific process.
+    /// Actions triggered long after the fact (a notification button) check it
+    /// before signalling anything.
+    public static func startTime(of pid: Int32) -> TimeInterval? {
+        var info = proc_bsdinfo()
+        let size = Int32(MemoryLayout<proc_bsdinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, size) == size else { return nil }
+        return TimeInterval(info.pbi_start_tvsec) + TimeInterval(info.pbi_start_tvusec) / 1_000_000
+    }
+
+    /// Whether `pid` is still the process that started at `startTime`.
+    public static func isSameProcess(_ pid: Int32, startedAt startTime: TimeInterval) -> Bool {
+        guard let current = self.startTime(of: pid) else { return false }
+        return abs(current - startTime) < 0.001
+    }
+
     /// Polls until every pid has exited or `timeout` passes. True when all are gone.
     public static func waitForExit(
         _ pids: [Int32],

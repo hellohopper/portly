@@ -46,4 +46,16 @@ struct PortGroupingTests {
     @Test func noSectionsWhenNoPorts() {
         #expect(PortGrouping.sections(for: [], pinned: []).isEmpty)
     }
+
+    /// Only real projects get group actions -- not "Pinned" or the "Other" bucket.
+    @Test func marksOnlyProjectSectionsAsProjects() {
+        let ports = [
+            makeInfo(port: 3000, projectName: "web"),
+            makeInfo(port: 4000),
+            makeInfo(port: 8000, projectName: "api"),
+        ]
+        let sections = PortGrouping.sections(for: ports, pinned: [8000])
+        #expect(sections.map(\.title) == ["Pinned", "web", "Other"])
+        #expect(sections.map(\.isProject) == [false, true, false])
+    }
 }

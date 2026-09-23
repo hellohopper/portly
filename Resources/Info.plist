@@ -24,6 +24,17 @@
     <string>Copyright © 2026</string>
     <key>NSPrincipalClass</key>
     <string>NSApplication</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>dev.hellohopper.portly</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>portly</string>
+            </array>
+        </dict>
+    </array>
     <key>NSAppleEventsUsageDescription</key>
     <string>Portly uses Apple Events to bring Terminal.app to the front and select the tab running a given dev server.</string>
 </dict>
