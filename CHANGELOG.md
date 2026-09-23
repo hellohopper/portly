@@ -14,6 +14,9 @@ All notable changes to Portly are documented here. Format loosely follows
 - **Workspace dependencies** — `.portly.json` services may be objects with `run`, `port` and `dependsOn`; `workspace up` starts them in dependency order, waiting for each dependency's port (`--timeout`), skips ones already listening, and rejects unknown dependencies and cycles
 - **Memory trend** — resident memory in MB next to %MEM, and a per-process sparkline that turns orange on sustained growth
 
+- **Raycast extension** (`integrations/raycast`) — "Listening Ports" (search; open, copy URL, restart, kill/force-kill with confirmation, pin, show in Portly) and "Copy Free Port"
+- Process ancestry now shows each wrapper by the name it runs as (`npm run dev`), and a login shell (`-zsh`) is correctly recognized as a boundary for "kill process tree"
+
 ### Fixed
 - **`portly workspace status` crashed** ("Duplicate values for key") whenever several processes shared a port — pre-fork servers like `gunicorn -w 4`, or `SO_REUSEPORT`. All holders are now listed
 - **Restart, relaunch-from-history and tunnels couldn't find Homebrew/nvm tools** when Portly was launched from Finder (launchd's minimal PATH), and reported success anyway because `/usr/bin/env` itself had started. Executables are now resolved against the user's login-shell PATH, the child gets that PATH too (so `#!/usr/bin/env node` shebangs work), and a missing command is reported as a failure with a notification
@@ -26,7 +29,8 @@ All notable changes to Portly are documented here. Format loosely follows
 - Menu bar CPU/MEM counted a process once per port it listened on
 - Auto-update installed without verification when a release had no `.dmg.sha256`; it now refuses, and also checks the new bundle's code signature against the running app's Team ID. Hashing, mounting and copying no longer block the main thread
 - History is written atomically, so a crash mid-save can't wipe it
-- `.localhost` proxy: reads are now paced by the receiving side (a slow client used to make the proxy buffer a whole response in memory), and later requests on a keep-alive connection show up in the request log
+- `.localhost` proxy: reads are now paced by the receiving side (a slow client used to make the proxy buffer a whole response in memory), and every request on a keep-alive connection shows up in the request log — the proxy now follows `Content-Length` and chunked bodies to find where the next request starts
+- Throughput sampling: a nettop restart could race the previous run's output parsing
 - Submodules' relative `gitdir:` paths resolved against the wrong directory, losing the branch
 - **Resolving the git project could loop forever** for a process whose working directory isn't inside a repo, on Foundation versions where the parent of `/` is `/..` rather than `/` — hanging the scan and growing memory until the process was killed (this is what silently killed the test run on CI's macOS 15)
 - A timed-out helper process that ignored SIGTERM could hang the caller
@@ -34,7 +38,7 @@ All notable changes to Portly are documented here. Format loosely follows
 
 ### Changed
 - Port scanning reads sockets straight from the kernel (libproc) instead of spawning `lsof` — ~6ms instead of ~140ms per refresh, with `lsof` kept as a fallback. Connected UDP client sockets (e.g. a browser's QUIC connections) are no longer listed as listening ports
-- Command lines are cached per process instead of re-running `ps -ww` on every refresh
+- The process table (CPU, memory, uptime, ancestry) and command lines are read from the kernel instead of `ps` (~5ms instead of ~60ms). Steady-state refreshes now spawn no helper processes at all; `ps` remains a fallback. %CPU is measured over the refresh interval rather than ps's decaying average
 - Health probes back off (10s → 20s → 40s → 60s) for ports that never answer HTTP, and overlapping refreshes no longer probe the same port twice
 - `portly wait` checks with a loopback connect instead of a full scan every 250ms
 - Removed the unused `UptimeResolver.elapsedSeconds` / `ProcessMetricsResolver.metrics` `ps` wrappers

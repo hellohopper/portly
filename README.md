@@ -147,6 +147,8 @@ open portly://restart/3000       # restart (asks first, unless trusted in Settin
 open portly://kill/3000          # also: force-kill, pin, unpin, copy
 ```
 
+A ready-made Raycast extension lives in [`integrations/raycast`](integrations/raycast): search listening ports, open/restart/kill them, and copy a free port.
+
 Homebrew installs the `portly` command automatically. For manual installs, symlink it once:
 
 ```bash
