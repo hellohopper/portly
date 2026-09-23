@@ -22,7 +22,7 @@ final class TunnelManager: ObservableObject {
 
     func start(port: Int) {
         guard tunnels[port] == nil || isFailed(port) else { return }
-        guard Self.isCloudflaredAvailable else {
+        guard let cloudflared = Self.cloudflaredPath else {
             tunnels[port] = .failed("cloudflared isn't installed. Run `brew install cloudflared`.")
             return
         }
@@ -30,9 +30,11 @@ final class TunnelManager: ObservableObject {
         tunnels[port] = .starting
 
         let process = Process()
-        // `cloudflared` needs PATH resolution, which Process.executableURL doesn't do.
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["cloudflared", "tunnel", "--url", "http://localhost:\(port)"]
+        // Resolved against the user's shell PATH: launched from Finder, the app's own
+        // PATH doesn't include Homebrew, so `/usr/bin/env cloudflared` never found it.
+        process.executableURL = URL(fileURLWithPath: cloudflared)
+        process.arguments = ["tunnel", "--url", "http://localhost:\(port)"]
+        process.environment = ExecutableResolver.environment()
 
         let pipe = Pipe()
         // cloudflared logs (including the assigned URL) go to stderr; merge both so
@@ -42,7 +44,13 @@ final class TunnelManager: ObservableObject {
 
         pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
-            guard !data.isEmpty, let chunk = String(data: data, encoding: .utf8) else { return }
+            // EOF: without detaching, Foundation re-invokes this handler in a tight
+            // loop until the termination handler gets around to it.
+            guard !data.isEmpty else {
+                handle.readabilityHandler = nil
+                return
+            }
+            guard let chunk = String(data: data, encoding: .utf8) else { return }
             guard let url = Self.extractURL(from: chunk) else { return }
             Task { @MainActor in
                 guard self?.processes[port] != nil else { return } // stopped in the meantime
@@ -87,9 +95,11 @@ final class TunnelManager: ObservableObject {
         return false
     }
 
-    private static let isCloudflaredAvailable: Bool = {
-        Shell.succeeds("/usr/bin/env", ["cloudflared", "--version"])
-    }()
+    /// Not cached: `brew install cloudflared` after a failed attempt should work
+    /// without relaunching Portly, and a lookup is only a few `stat`s.
+    private static var cloudflaredPath: String? {
+        ExecutableResolver.resolve("cloudflared")
+    }
 
     /// cloudflared prints its assigned hostname inside a bordered banner, e.g.
     /// "https://random-words-1234.trycloudflare.com".

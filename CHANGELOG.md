@@ -3,6 +3,33 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Fixed
+- **`portly workspace status` crashed** ("Duplicate values for key") whenever several processes shared a port — pre-fork servers like `gunicorn -w 4`, or `SO_REUSEPORT`. All holders are now listed
+- **Restart, relaunch-from-history and tunnels couldn't find Homebrew/nvm tools** when Portly was launched from Finder (launchd's minimal PATH), and reported success anyway because `/usr/bin/env` itself had started. Executables are now resolved against the user's login-shell PATH, the child gets that PATH too (so `#!/usr/bin/env node` shebangs work), and a missing command is reported as a failure with a notification
+- **`Shell.succeeds` ignored exit status**, so a missing `cloudflared` read as installed and a failed `docker stop`/`docker restart` read as success
+- **CLI `portly kill` / `workspace down` on a Docker-forwarded port SIGTERMed `com.docker.backend`**, taking down every container's port forwarding. They now `docker stop` the matched container, as the app already did
+- **Restart relaunched after a fixed 0.5s**, racing slow graceful shutdowns into EADDRINUSE (or Vite drifting to 5174). It now waits for the old process to exit, escalating to SIGKILL after 5s
+- Closing the panel by clicking elsewhere left polling at the 2s "visible" rate forever
+- The git branch was cached for the life of a process, so `git checkout` under a running dev server went unnoticed
+- The per-process context cache never evicted dead pids
+- Menu bar CPU/MEM counted a process once per port it listened on
+- Auto-update installed without verification when a release had no `.dmg.sha256`; it now refuses, and also checks the new bundle's code signature against the running app's Team ID. Hashing, mounting and copying no longer block the main thread
+- History is written atomically, so a crash mid-save can't wipe it
+- `.localhost` proxy: reads are now paced by the receiving side (a slow client used to make the proxy buffer a whole response in memory), and later requests on a keep-alive connection show up in the request log
+- Submodules' relative `gitdir:` paths resolved against the wrong directory, losing the branch
+- **Resolving the git project could loop forever** for a process whose working directory isn't inside a repo, on Foundation versions where the parent of `/` is `/..` rather than `/` — hanging the scan and growing memory until the process was killed (this is what silently killed the test run on CI's macOS 15)
+- A timed-out helper process that ignored SIGTERM could hang the caller
+- **Child processes inherited every stray descriptor Portly had open**, including other helpers' pipes: with several helpers running at once, one could hold another's pipe open so its reader timed out (this is what made `Shell` tests fail on CI), and a relaunched dev server pinned Portly's descriptors for its whole lifetime. Helpers and relaunched servers are now spawned with only stdin/stdout/stderr, in their own process group, and reaped when they exit
+
+### Changed
+- Port scanning reads sockets straight from the kernel (libproc) instead of spawning `lsof` — ~6ms instead of ~140ms per refresh, with `lsof` kept as a fallback. Connected UDP client sockets (e.g. a browser's QUIC connections) are no longer listed as listening ports
+- Command lines are cached per process instead of re-running `ps -ww` on every refresh
+- Health probes back off (10s → 20s → 40s → 60s) for ports that never answer HTTP, and overlapping refreshes no longer probe the same port twice
+- `portly wait` checks with a loopback connect instead of a full scan every 250ms
+- Removed the unused `UptimeResolver.elapsedSeconds` / `ProcessMetricsResolver.metrics` `ps` wrappers
+
 ## [0.7.0] - 2026-08-30
 
 ### Added

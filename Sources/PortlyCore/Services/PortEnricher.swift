@@ -34,20 +34,32 @@ public enum PortEnricher {
     /// reused pid is a different process with a different working directory.
     public struct ProjectContext: Sendable {
         public let projectName: String?
-        public let gitBranch: String?
+        /// Re-read from `gitDirectory` on every refresh rather than trusted from the
+        /// cache: `git checkout` while the dev server keeps running is routine.
+        public var gitBranch: String?
         public let workingDirectory: String?
         public let startTime: TimeInterval?
+        /// The `.git` directory (or worktree `.git` file) the branch is read from.
+        public let gitDirectory: String?
+        /// A process's argv doesn't change over its lifetime, so it's cached here too
+        /// -- that turns the per-refresh `ps -ww` into one that only runs when a new
+        /// process shows up.
+        public var commandLine: String?
 
         public init(
             projectName: String?,
             gitBranch: String?,
             workingDirectory: String?,
-            startTime: TimeInterval?
+            startTime: TimeInterval?,
+            gitDirectory: String? = nil,
+            commandLine: String? = nil
         ) {
             self.projectName = projectName
             self.gitBranch = gitBranch
             self.workingDirectory = workingDirectory
             self.startTime = startTime
+            self.gitDirectory = gitDirectory
+            self.commandLine = commandLine
         }
     }
 
@@ -77,17 +89,31 @@ public enum PortEnricher {
         let table = ProcessTable.snapshot()
         let uptimes = table.uptimeSeconds(for: uniquePids)
         let metrics = table.metrics(for: uniquePids)
-        let commandLines = CommandLineResolver.commandLines(for: uniquePids)
         let ancestryTable = options.includeAncestry ? table.ancestryTable : [:]
 
-        var cache = contextCache
+        // Only pids that still exist are worth remembering; everything else would
+        // accumulate for the lifetime of the app.
+        let livePids = Set(uniquePids)
+        var cache = contextCache.filter { livePids.contains($0.key) }
+        var contexts: [Int32: ProjectContext] = [:]
+        for pid in uniquePids {
+            contexts[pid] = projectContext(for: pid, startedAt: table.startTime(of: pid), cache: &cache)
+        }
+
+        // Command lines only for processes not seen before (or whose lookup failed).
+        let missingCommandLines = uniquePids.filter { contexts[$0]?.commandLine == nil }
+        if !missingCommandLines.isEmpty {
+            for (pid, commandLine) in CommandLineResolver.commandLines(for: missingCommandLines) {
+                contexts[pid]?.commandLine = commandLine
+                cache[pid]?.commandLine = commandLine
+            }
+        }
+
         var enriched: [PortInfo] = []
         enriched.reserveCapacity(scanned.count)
 
         for var info in scanned {
-            let context = projectContext(
-                for: info.pid, startedAt: table.startTime(of: info.pid), cache: &cache
-            )
+            guard let context = contexts[info.pid] else { continue }
             info.projectName = context.projectName
             info.gitBranch = context.gitBranch
             info.workingDirectory = context.workingDirectory
@@ -102,7 +128,7 @@ public enum PortEnricher {
                 }
                 info.throughputHistory = NetworkThroughputResolver.shared.history(for: info.pid)
             }
-            if let commandLine = commandLines[info.pid] {
+            if let commandLine = context.commandLine {
                 info.commandLine = commandLine
                 info.frameworkLabel = FrameworkDetector.detect(
                     processName: info.processName, commandLine: commandLine
@@ -173,17 +199,24 @@ public enum PortEnricher {
     ) -> ProjectContext {
         // `ps` reports elapsed time in whole seconds, so a process's derived start
         // time can wobble by a second between snapshots.
-        if let cached = cache[pid], isSameProcess(cached.startTime, startedAt) {
+        if var cached = cache[pid], isSameProcess(cached.startTime, startedAt) {
+            // The branch is the one part that changes under a live process.
+            if let gitDirectory = cached.gitDirectory {
+                cached.gitBranch = GitProjectResolver.readBranch(gitDir: URL(fileURLWithPath: gitDirectory))
+                cache[pid] = cached
+            }
             return cached
         }
-        // One lsof for the cwd, then pure filesystem reads from there.
+        // One syscall for the cwd, then pure filesystem reads from there.
         let workingDirectory = GitProjectResolver.workingDirectory(of: pid)
+        let gitDirectory = workingDirectory.flatMap { GitProjectResolver.findGitDir(startingAt: $0) }
         let resolved = workingDirectory.map(GitProjectResolver.resolve(workingDirectory:))
         let context = ProjectContext(
             projectName: resolved?.projectName,
             gitBranch: resolved?.gitBranch,
             workingDirectory: workingDirectory,
-            startTime: startedAt
+            startTime: startedAt,
+            gitDirectory: gitDirectory?.path
         )
         cache[pid] = context
         return context

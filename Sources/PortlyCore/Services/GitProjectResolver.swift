@@ -65,32 +65,47 @@ public enum GitProjectResolver {
     }
 
     /// Walks up from `path` looking for a ".git" directory or file (worktrees use a file).
+    ///
+    /// Walks path strings rather than `URL.deletingLastPathComponent()`: on some
+    /// Foundation versions the parent of "/" isn't "/" but "/..", so a loop waiting
+    /// for the path to stop changing never ended -- it hung the scan (and ate memory
+    /// until the process was killed) for any cwd outside a git repo. The depth cap is
+    /// a backstop against any other way the walk could fail to converge.
     static func findGitDir(startingAt path: String) -> URL? {
-        var current = URL(fileURLWithPath: path)
+        var current = (path as NSString).standardizingPath
         let fm = FileManager.default
 
-        while true {
-            let candidate = current.appendingPathComponent(".git")
-            if fm.fileExists(atPath: candidate.path) {
-                return candidate
+        for _ in 0..<256 {
+            let candidate = (current as NSString).appendingPathComponent(".git")
+            if fm.fileExists(atPath: candidate) {
+                return URL(fileURLWithPath: candidate)
             }
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path { return nil }
-            current = parent
+            guard current != "/", !current.isEmpty else { return nil }
+            let parent = (current as NSString).deletingLastPathComponent
+            guard parent != current else { return nil }
+            current = parent.isEmpty ? "/" : parent
         }
+        return nil
     }
 
     static func readBranch(gitDir: URL) -> String? {
         var actualGitDir = gitDir
 
-        // Worktrees: ".git" is a file (not a directory) containing
-        // "gitdir: /path/to/real/.git/worktrees/<name>", which itself has its own HEAD.
+        // Worktrees and submodules: ".git" is a file (not a directory) containing
+        // "gitdir: <path>", which itself has its own HEAD. Submodules write that path
+        // relative ("gitdir: ../.git/modules/lib"), and it's relative to the file's
+        // own directory -- not to whatever this process's cwd happens to be.
         if let contents = try? String(contentsOf: gitDir, encoding: .utf8),
            contents.hasPrefix("gitdir:") {
             let realPath = contents
-                .replacingOccurrences(of: "gitdir:", with: "")
+                .dropFirst("gitdir:".count)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            actualGitDir = URL(fileURLWithPath: realPath)
+            // Plain path strings, not URL(relativeTo:).standardizedFileURL: that
+            // combination took down the whole test process on macOS 15.
+            let absolute = realPath.hasPrefix("/")
+                ? realPath
+                : (gitDir.deletingLastPathComponent().path as NSString).appendingPathComponent(realPath)
+            actualGitDir = URL(fileURLWithPath: (absolute as NSString).standardizingPath)
         }
 
         let headURL = actualGitDir.appendingPathComponent("HEAD")

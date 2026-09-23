@@ -93,9 +93,27 @@ public actor HealthChecker {
         let health: Health?
         let checkedAt: Date
         let target: Target
+        /// Consecutive probes that got no answer. System services (rapportd,
+        /// AirPlay, ...) never speak HTTP, and each failed probe can burn a HEAD plus
+        /// a GET timeout -- so a port that keeps not answering is retried less often.
+        var consecutiveMisses = 0
     }
 
     private var cache: [Int: CacheEntry] = [:]
+    /// Ports with a probe already running. The actor is reentrant across `await`, so
+    /// without this two overlapping refreshes both probed the same stale ports.
+    private var inFlight: Set<Int> = []
+
+    /// Longest wait between probes of a port that never answers.
+    static let maxBackoff: TimeInterval = 60
+
+    /// How long a cache entry stays fresh: the base interval while a port answers,
+    /// doubling per consecutive miss up to `maxBackoff`.
+    static func recheckDelay(base: TimeInterval, consecutiveMisses: Int) -> TimeInterval {
+        guard consecutiveMisses > 1 else { return base }
+        let doubled = base * pow(2, Double(min(consecutiveMisses - 1, 16)))
+        return min(max(base, maxBackoff), doubled)
+    }
 
     /// `now` is injectable so cache expiry can be tested without sleeping.
     public init(recheckInterval: TimeInterval = 10, now: @escaping @Sendable () -> Date = { Date() }) {
@@ -125,10 +143,13 @@ public actor HealthChecker {
     ) async -> [Int: Health] {
         let timestamp = now()
         let stalePorts = ports.filter { port in
+            guard !inFlight.contains(port) else { return false }
             guard let entry = cache[port] else { return true }
             if entry.target != (targets[port] ?? .default) { return true }
-            return timestamp.timeIntervalSince(entry.checkedAt) >= recheckInterval
+            let delay = Self.recheckDelay(base: recheckInterval, consecutiveMisses: entry.consecutiveMisses)
+            return timestamp.timeIntervalSince(entry.checkedAt) >= delay
         }
+        inFlight.formUnion(stalePorts)
 
         await withTaskGroup(of: (Int, Health?).self) { group in
             for port in stalePorts {
@@ -140,9 +161,16 @@ public actor HealthChecker {
                 }
             }
             for await (port, health) in group {
+                let target = targets[port] ?? .default
+                let previous = cache[port]
+                // Misses only accumulate against the same target; a changed health
+                // path deserves a fresh start.
+                let priorMisses = previous?.target == target ? (previous?.consecutiveMisses ?? 0) : 0
+                let misses = health == nil ? priorMisses + 1 : 0
                 cache[port] = CacheEntry(
-                    health: health, checkedAt: timestamp, target: targets[port] ?? .default
+                    health: health, checkedAt: timestamp, target: target, consecutiveMisses: misses
                 )
+                inFlight.remove(port)
             }
         }
 

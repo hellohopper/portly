@@ -36,6 +36,21 @@ enum NotificationManager {
         )
     }
 
+    static func notifyLaunchFailed(commandLine: String) {
+        let executable = ProcessLauncher.argv(from: commandLine).first ?? commandLine
+        notify(
+            title: "Couldn't start the server",
+            body: "\(executable) wasn't found on your PATH, or failed to launch: \(commandLine)"
+        )
+    }
+
+    static func notifyRestartBlocked(_ info: PortInfo) {
+        notify(
+            title: "Restart cancelled",
+            body: "\(describe(info)) on port \(info.port) didn't exit, so it wasn't relaunched"
+        )
+    }
+
     private static func describe(_ info: PortInfo) -> String {
         info.frameworkLabel ?? info.processName
     }

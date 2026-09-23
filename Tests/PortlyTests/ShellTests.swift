@@ -26,4 +26,11 @@ struct ShellTests {
         #expect(output == nil)
         #expect(Date().timeIntervalSince(start) < 10)
     }
+
+    @Test func succeedsReflectsExitStatusNotJustOutput() {
+        #expect(Shell.succeeds("/usr/bin/true", []))
+        // Prints nothing to stdout and exits non-zero -- used to count as success.
+        #expect(!Shell.succeeds("/usr/bin/false", []))
+        #expect(!Shell.succeeds("/usr/bin/env", ["portly-definitely-not-installed-binary"]))
+    }
 }

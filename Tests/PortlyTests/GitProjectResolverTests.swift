@@ -77,4 +77,31 @@ struct GitProjectResolverTests {
 
         #expect(GitProjectResolver.readBranch(gitDir: gitFile) == "feature-branch")
     }
+
+    /// Submodules write the gitdir relative to the `.git` file's own directory.
+    @Test func readBranchFollowsRelativeSubmoduleGitdir() throws {
+        let tempRoot = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let moduleGitDir = tempRoot.appendingPathComponent(".git/modules/lib")
+        try FileManager.default.createDirectory(at: moduleGitDir, withIntermediateDirectories: true)
+        try "ref: refs/heads/sub-branch\n".write(
+            to: moduleGitDir.appendingPathComponent("HEAD"), atomically: true, encoding: .utf8
+        )
+
+        let submodule = tempRoot.appendingPathComponent("lib")
+        try FileManager.default.createDirectory(at: submodule, withIntermediateDirectories: true)
+        let gitFile = submodule.appendingPathComponent(".git")
+        try "gitdir: ../.git/modules/lib\n".write(to: gitFile, atomically: true, encoding: .utf8)
+
+        #expect(GitProjectResolver.readBranch(gitDir: gitFile) == "sub-branch")
+    }
+
+    /// The walk must terminate at "/" -- it used to loop forever on Foundation
+    /// versions where the parent of "/" is "/..".
+    @Test func findGitDirTerminatesAtRootAndOnRelativePaths() {
+        #expect(GitProjectResolver.findGitDir(startingAt: "/") == nil || FileManager.default.fileExists(atPath: "/.git"))
+        _ = GitProjectResolver.findGitDir(startingAt: "relative/path")
+        _ = GitProjectResolver.findGitDir(startingAt: "")
+    }
 }

@@ -44,6 +44,22 @@ struct HealthCheckerCacheTests {
         #expect(results[64_999] == nil)
     }
 
+    // MARK: - Backoff for ports that never answer
+
+    @Test func answeringPortsUseTheBaseInterval() {
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 0) == 10)
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 1) == 10)
+    }
+
+    /// A non-HTTP port backs off 10 -> 20 -> 40 -> 60 and stays capped there, so a
+    /// server that's merely slow to start still gets its badge within a minute.
+    @Test func silentPortsBackOffUpToACap() {
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 2) == 20)
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 3) == 40)
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 4) == 60)
+        #expect(HealthChecker.recheckDelay(base: 10, consecutiveMisses: 50) == 60)
+    }
+
     // MARK: - TCP-only probing (databases and other wire-protocol services)
 
     @Test func tcpHealthHasNoStatusCodeAndIsHealthyWhenFast() {
