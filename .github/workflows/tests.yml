@@ -19,10 +19,20 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 10
-        run: swift test
+        run: swift test --xunit-output test-results.xml
 
       # A crashing test binary loses its buffered output, leaving only "exit code
       # 1" in the log; the crash report is the only record of what happened.
+      - name: Print test results
+        if: failure()
+        run: |
+          # Written by the test binary itself, so it survives even when its stdout
+          # doesn't make it into the log.
+          for results in test-results*.xml; do
+            echo "=== $results"
+            grep -E '<testsuite |<failure|<testcase[^>]*time="[0-9]{2,}' "$results" | head -60 || true
+          done
+
       - name: Print crash reports
         if: failure()
         run: |
