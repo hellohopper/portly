@@ -3,7 +3,7 @@
 All notable changes to Portly are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## [0.8.0] - 2026-09-23
 
 ### Added
 - **Force kill** — a process still running 5s after SIGTERM gets a notification with a Force Kill button; right-click → "Force kill (SIGKILL)"; `portly kill <port>` now waits for the exit and reports a survivor, and `--force` SIGKILLs it
