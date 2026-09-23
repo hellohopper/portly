@@ -195,9 +195,15 @@ public final class LocalhostProxyServer: @unchecked Sendable {
             return
         }
 
-        if let requestLine = headerText.components(separatedBy: "\r\n").first {
-            Task { await ProxyRequestLog.shared.record(name: name, targetPort: targetPort, requestLine: requestLine) }
+        // Frames the client's side of the connection so every request on it is
+        // logged -- keep-alive ones included -- starting with the bytes read so far.
+        let tracker = TrackerBox()
+        let log: @Sendable (Data) -> Void = { data in
+            for requestLine in tracker.consume(data) {
+                Task { await ProxyRequestLog.shared.record(name: name, targetPort: targetPort, requestLine: requestLine) }
+            }
         }
+        log(headerBytes)
 
         let upstream = NWConnection(host: "127.0.0.1", port: nwPort, using: .tcp)
         upstream.start(queue: .global(qos: .utility))
@@ -208,30 +214,21 @@ public final class LocalhostProxyServer: @unchecked Sendable {
         // Both directions must finish before the pair is torn down; whichever ends
         // first only half-closes.
         let pair = ConnectionPair(client: connection, upstream: upstream)
-        pipe(from: connection, to: upstream, pair: pair) { data in
-            // Keep-alive: later requests on the same connection never go back through
-            // `route`, so log any chunk that opens with a request line too.
-            guard let requestLine = Self.requestLine(startingChunk: data) else { return }
-            Task { await ProxyRequestLog.shared.record(name: name, targetPort: targetPort, requestLine: requestLine) }
-        }
+        pipe(from: connection, to: upstream, pair: pair, onChunk: log)
         pipe(from: upstream, to: connection, pair: pair)
     }
 
-    private static let requestMethods: Set<String> = [
-        "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "CONNECT", "TRACE",
-    ]
+    /// One direction's reads are serialized, but the first feed happens on another
+    /// queue than the rest, so the tracker's state is guarded anyway.
+    private final class TrackerBox: @unchecked Sendable {
+        private let lock = NSLock()
+        private var tracker = HTTPRequestTracker()
 
-    /// The request line when `data` starts a new HTTP/1.x request, e.g.
-    /// "GET /api/users HTTP/1.1". Best-effort: a request that begins mid-chunk (after
-    /// the previous body, in the same read) isn't seen, but a body is never mistaken
-    /// for a request unless it literally begins with one.
-    static func requestLine(startingChunk data: Data) -> String? {
-        guard let newline = data.prefix(2048).firstIndex(of: UInt8(ascii: "\r")),
-              let line = String(data: data[data.startIndex..<newline], encoding: .utf8) else { return nil }
-        let parts = line.split(separator: " ")
-        guard parts.count == 3, requestMethods.contains(String(parts[0])),
-              parts[2].hasPrefix("HTTP/1.") else { return nil }
-        return line
+        func consume(_ data: Data) -> [String] {
+            lock.lock()
+            defer { lock.unlock() }
+            return tracker.consume(data)
+        }
     }
 
     /// Tracks how many of a proxied connection's two directions have finished, so the

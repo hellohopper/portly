@@ -1,12 +1,11 @@
 import Foundation
 
-/// One `ps` call covering everything the port list needs per refresh: uptime, %CPU,
-/// %MEM, and the parent/name table used for process ancestry.
+/// Everything the port list needs per refresh about processes: uptime, %CPU, %MEM,
+/// resident memory, and the parent/name table used for process ancestry.
 ///
-/// These used to be three separate `ps -p <pids>` invocations plus a fourth
-/// `ps -axo` for the tree. All five leading columns are whitespace-free, so a single
-/// `ps -axo pid=,ppid=,etime=,pcpu=,pmem=,comm=` parses unambiguously with a bounded
-/// split -- only `command=` still needs its own call, because argv contains spaces.
+/// Read from the kernel (`NativeProcessTable`); a single `ps -axo` is the fallback.
+/// Its columns are whitespace-free up to the trailing path, so it parses
+/// unambiguously with a bounded split.
 public struct ProcessTable: Sendable {
 
     public struct Entry: Sendable {
@@ -18,6 +17,9 @@ public struct ProcessTable: Sendable {
         /// Resident memory in bytes -- the absolute number behind %MEM, for spotting
         /// growth that a rounded percentage hides.
         public let residentBytes: UInt64?
+        /// Exact start time (seconds since 1970) when read from the kernel; nil from
+        /// `ps`, whose elapsed time is only good to the second.
+        public let startTime: TimeInterval?
 
         public init(
             ppid: Int32,
@@ -25,7 +27,8 @@ public struct ProcessTable: Sendable {
             uptimeSeconds: Int?,
             cpuPercent: Double?,
             memPercent: Double?,
-            residentBytes: UInt64? = nil
+            residentBytes: UInt64? = nil,
+            startTime: TimeInterval? = nil
         ) {
             self.ppid = ppid
             self.name = name
@@ -33,6 +36,14 @@ public struct ProcessTable: Sendable {
             self.cpuPercent = cpuPercent
             self.memPercent = memPercent
             self.residentBytes = residentBytes
+            self.startTime = startTime
+        }
+
+        func with(cpuPercent: Double?) -> Entry {
+            Entry(
+                ppid: ppid, name: name, uptimeSeconds: uptimeSeconds, cpuPercent: cpuPercent,
+                memPercent: memPercent, residentBytes: residentBytes, startTime: startTime
+            )
         }
     }
 
@@ -47,6 +58,13 @@ public struct ProcessTable: Sendable {
     }
 
     public static func snapshot() -> ProcessTable {
+        if let native = NativeProcessTable.snapshot() {
+            return native
+        }
+        return snapshotWithPs()
+    }
+
+    static func snapshotWithPs() -> ProcessTable {
         let takenAt = ProcessInfo.processInfo.systemUptime
         guard let output = Shell.run("/bin/ps", ["-axo", "pid=,ppid=,etime=,pcpu=,pmem=,rss=,comm="]) else {
             return ProcessTable(entries: [:], takenAtSystemUptime: takenAt)
@@ -58,6 +76,7 @@ public struct ProcessTable: Sendable {
     /// change between snapshots, so it can identify a process across refreshes and
     /// distinguish a reused pid from the original holder.
     public func startTime(of pid: Int32) -> TimeInterval? {
+        if let exact = entries[pid]?.startTime { return exact }
         guard let uptime = entries[pid]?.uptimeSeconds else { return nil }
         return takenAtSystemUptime - TimeInterval(uptime)
     }

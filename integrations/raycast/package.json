@@ -1,0 +1,39 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "portly",
+  "title": "Portly",
+  "description": "See what's listening on your Mac's ports, open it, restart it or kill it — powered by Portly.",
+  "icon": "icon.png",
+  "author": "hellohopper",
+  "license": "MIT",
+  "categories": ["Developer Tools"],
+  "commands": [
+    {
+      "name": "ports",
+      "title": "Listening Ports",
+      "subtitle": "Portly",
+      "description": "Search listening ports by number, process, framework or project, and act on them.",
+      "mode": "view"
+    },
+    {
+      "name": "free-port",
+      "title": "Copy Free Port",
+      "subtitle": "Portly",
+      "description": "Copy an unused port from the common 3000/5000/8000 dev ranges.",
+      "mode": "no-view"
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.100.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "typescript": "^5.6.0"
+  },
+  "scripts": {
+    "build": "ray build -e dist",
+    "dev": "ray develop",
+    "typecheck": "tsc --noEmit"
+  }
+}
