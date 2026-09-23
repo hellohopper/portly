@@ -34,11 +34,18 @@ struct NativeProcessTableTests {
     }
 
     @Test func parsesKernelArgumentBuffers() {
+        // Built step by step: one long `+` chain is too much for older type checkers.
         var bytes: [UInt8] = []
         withUnsafeBytes(of: Int32(3)) { bytes.append(contentsOf: $0) }
-        bytes += Array("/opt/homebrew/bin/node".utf8) + [0, 0, 0, 0]
-        bytes += Array("node".utf8) + [0] + Array("server.js".utf8) + [0] + Array("--port".utf8) + [0]
-        bytes += Array("PATH=/usr/bin".utf8) + [0]
+        func appendCString(_ string: String) {
+            bytes.append(contentsOf: Array(string.utf8))
+            bytes.append(0)
+        }
+        appendCString("/opt/homebrew/bin/node")
+        bytes.append(contentsOf: [UInt8](repeating: 0, count: 3)) // padding
+        for argument in ["node", "server.js", "--port", "PATH=/usr/bin"] {
+            appendCString(argument)
+        }
         #expect(ProcessArguments.parse(bytes) == ["node", "server.js", "--port"])
         #expect(ProcessArguments.parse([1, 0]) == nil)
     }
