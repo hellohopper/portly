@@ -17,7 +17,8 @@ func appBundleVersion() -> String? {
 
     var realBuffer = [Int8](repeating: 0, count: Int(PATH_MAX))
     guard realpath(pathBuffer, &realBuffer) != nil else { return nil }
-    let executableURL = URL(fileURLWithPath: String(cString: realBuffer))
+    let realPath = String(decoding: realBuffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
+    let executableURL = URL(fileURLWithPath: realPath)
 
     // executableURL: .../Portly.app/Contents/MacOS/portly-cli
     let bundleURL = executableURL

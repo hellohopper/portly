@@ -105,7 +105,7 @@ enum NativeSocketScanner {
             if withUnsafeBytes(of: &address, { $0.allSatisfy { $0 == 0 } }) { return "*" }
             inet_ntop(AF_INET6, &address, &buffer, socklen_t(buffer.count))
         }
-        return String(cString: buffer)
+        return decodeCString(buffer)
     }
 
     /// The same name lsof's `c` field reports: the kernel's full process name,
@@ -113,6 +113,11 @@ enum NativeSocketScanner {
     private static func processName(of pid: pid_t) -> String {
         var buffer = [CChar](repeating: 0, count: Int(MAXCOMLEN) * 2 + 1)
         let length = proc_name(pid, &buffer, UInt32(buffer.count))
-        return length > 0 ? String(cString: buffer) : ""
+        return length > 0 ? decodeCString(buffer) : ""
+    }
+
+    /// A NUL-terminated C buffer as a String.
+    static func decodeCString(_ buffer: [CChar]) -> String {
+        String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)
     }
 }

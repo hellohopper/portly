@@ -26,11 +26,14 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
     private var history: [Int32: [Double]] = [:]
     private let historyLimit = 20
 
-    // Only touched from the pipe's readabilityHandler, which macOS serializes onto a
-    // single dispatch queue per file handle, so these don't need the lock.
+    // Parse state. The readability handler is serialized per file handle, but
+    // stop()/start() reset these from other threads -- and a late callback from a
+    // previous nettop could resume mid-line into the new one's buffer -- so it all
+    // lives under `lock`, and callbacks carry the generation they were started for.
     private var currentBlock: [Int32: Throughput] = [:]
     private var isFirstBlock = true
     private var lineBuffer = ""
+    private var generation = 0
 
     private init() {}
 
@@ -39,6 +42,8 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         defer { lock.unlock() }
         guard process == nil else { return }
 
+        generation &+= 1
+        let generation = self.generation
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
         task.arguments = [
@@ -58,11 +63,11 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
             // for the rest of the app's lifetime -- so tear down and allow a respawn.
             guard !data.isEmpty else {
                 handle.readabilityHandler = nil
-                self?.handleUnexpectedExit()
+                self?.handleUnexpectedExit(generation: generation)
                 return
             }
             guard let chunk = String(data: data, encoding: .utf8) else { return }
-            self?.consume(chunk)
+            self?.consume(chunk, generation: generation)
         }
 
         do {
@@ -81,6 +86,7 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         readHandle?.readabilityHandler = nil
         readHandle = nil
         process = nil
+        generation &+= 1
         // A later start() must not treat nettop's cumulative first block as a delta,
         // and must not resume mid-line from the previous run.
         isFirstBlock = true
@@ -94,8 +100,13 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
 
     /// nettop died on its own. Clear the process handle so the next `start()` can
     /// respawn it rather than the guard silently keeping throughput frozen forever.
-    private func handleUnexpectedExit() {
+    private func handleUnexpectedExit(generation: Int) {
         lock.lock()
+        // A stop() or restart already replaced this nettop; nothing to tear down.
+        guard generation == self.generation else {
+            lock.unlock()
+            return
+        }
         let taskToStop = process
         readHandle = nil
         process = nil
@@ -136,7 +147,10 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         return history[pid] ?? []
     }
 
-    private func consume(_ chunk: String) {
+    private func consume(_ chunk: String, generation: Int) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard generation == self.generation else { return }
         lineBuffer += chunk
         var lines = lineBuffer.components(separatedBy: "\n")
         lineBuffer = lines.removeLast() // may be a partial line; keep it for the next chunk
@@ -155,6 +169,7 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         }
     }
 
+    /// Called with `lock` held.
     private func finishBlock() {
         defer { currentBlock = [:] }
         guard !currentBlock.isEmpty else { return }
@@ -167,7 +182,6 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
             return
         }
 
-        lock.lock()
         latest = currentBlock
         for (pid, sample) in currentBlock {
             var samples = history[pid] ?? []
@@ -179,6 +193,5 @@ public final class NetworkThroughputResolver: @unchecked Sendable {
         }
         let livePids = Set(currentBlock.keys)
         history = history.filter { livePids.contains($0.key) }
-        lock.unlock()
     }
 }
