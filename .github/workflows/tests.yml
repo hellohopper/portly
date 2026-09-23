@@ -43,3 +43,18 @@ jobs:
             echo "=== $report"
             head -c 20000 "$report"
           done
+
+      - name: Isolate failing suites
+        if: failure()
+        timeout-minutes: 15
+        run: |
+          # Re-run each suite on its own; a suite whose run dies without a summary
+          # (killed by a signal) is reported with its exit status.
+          for suite in $(ls Tests/PortlyTests | sed 's/\.swift$//'); do
+            out=$(swift test --skip-build --filter "${suite}" 2>&1); status=$?
+            summary=$(echo "$out" | grep -E "Test run with" | tail -1)
+            if [ $status -ne 0 ] || [ -z "$summary" ]; then
+              echo "=== ${suite}: exit ${status}"
+              echo "$out" | grep -vE "started\.|passed after" | tail -15
+            fi
+          done
