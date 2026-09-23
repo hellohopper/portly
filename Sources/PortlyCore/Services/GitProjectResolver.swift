@@ -92,9 +92,12 @@ public enum GitProjectResolver {
             let realPath = contents
                 .dropFirst("gitdir:".count)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            actualGitDir = realPath.hasPrefix("/")
-                ? URL(fileURLWithPath: realPath)
-                : URL(fileURLWithPath: realPath, relativeTo: gitDir.deletingLastPathComponent()).standardizedFileURL
+            // Plain path strings, not URL(relativeTo:).standardizedFileURL: that
+            // combination took down the whole test process on macOS 15.
+            let absolute = realPath.hasPrefix("/")
+                ? realPath
+                : (gitDir.deletingLastPathComponent().path as NSString).appendingPathComponent(realPath)
+            actualGitDir = URL(fileURLWithPath: (absolute as NSString).standardizingPath)
         }
 
         let headURL = actualGitDir.appendingPathComponent("HEAD")
