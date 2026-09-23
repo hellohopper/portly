@@ -20,3 +20,13 @@ jobs:
       - name: Run tests
         timeout-minutes: 10
         run: swift test
+
+      # A crashing test binary loses its buffered output, leaving only "exit code
+      # 1" in the log; the crash report is the only record of what happened.
+      - name: Print crash reports
+        if: failure()
+        run: |
+          for report in $(ls -t ~/Library/Logs/DiagnosticReports/*PortlyPackageTests* 2>/dev/null | head -2); do
+            echo "=== $report"
+            head -c 20000 "$report"
+          done
