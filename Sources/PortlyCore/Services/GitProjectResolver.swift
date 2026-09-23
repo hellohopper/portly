@@ -65,19 +65,27 @@ public enum GitProjectResolver {
     }
 
     /// Walks up from `path` looking for a ".git" directory or file (worktrees use a file).
+    ///
+    /// Walks path strings rather than `URL.deletingLastPathComponent()`: on some
+    /// Foundation versions the parent of "/" isn't "/" but "/..", so a loop waiting
+    /// for the path to stop changing never ended -- it hung the scan (and ate memory
+    /// until the process was killed) for any cwd outside a git repo. The depth cap is
+    /// a backstop against any other way the walk could fail to converge.
     static func findGitDir(startingAt path: String) -> URL? {
-        var current = URL(fileURLWithPath: path)
+        var current = (path as NSString).standardizingPath
         let fm = FileManager.default
 
-        while true {
-            let candidate = current.appendingPathComponent(".git")
-            if fm.fileExists(atPath: candidate.path) {
-                return candidate
+        for _ in 0..<256 {
+            let candidate = (current as NSString).appendingPathComponent(".git")
+            if fm.fileExists(atPath: candidate) {
+                return URL(fileURLWithPath: candidate)
             }
-            let parent = current.deletingLastPathComponent()
-            if parent.path == current.path { return nil }
-            current = parent
+            guard current != "/", !current.isEmpty else { return nil }
+            let parent = (current as NSString).deletingLastPathComponent
+            guard parent != current else { return nil }
+            current = parent.isEmpty ? "/" : parent
         }
+        return nil
     }
 
     static func readBranch(gitDir: URL) -> String? {

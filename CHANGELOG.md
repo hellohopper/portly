@@ -19,6 +19,7 @@ All notable changes to Portly are documented here. Format loosely follows
 - History is written atomically, so a crash mid-save can't wipe it
 - `.localhost` proxy: reads are now paced by the receiving side (a slow client used to make the proxy buffer a whole response in memory), and later requests on a keep-alive connection show up in the request log
 - Submodules' relative `gitdir:` paths resolved against the wrong directory, losing the branch
+- **Resolving the git project could loop forever** for a process whose working directory isn't inside a repo, on Foundation versions where the parent of `/` is `/..` rather than `/` — hanging the scan and growing memory until the process was killed (this is what silently killed the test run on CI's macOS 15)
 - A timed-out helper process that ignored SIGTERM could hang the caller
 - **Child processes inherited every stray descriptor Portly had open**, including other helpers' pipes: with several helpers running at once, one could hold another's pipe open so its reader timed out (this is what made `Shell` tests fail on CI), and a relaunched dev server pinned Portly's descriptors for its whole lifetime. Helpers and relaunched servers are now spawned with only stdin/stdout/stderr, in their own process group, and reaped when they exit
 

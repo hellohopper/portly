@@ -44,13 +44,3 @@ jobs:
             head -c 20000 "$report"
           done
 
-      - name: Diagnose GitProjectResolverTests (temporary)
-        if: failure()
-        timeout-minutes: 10
-        run: |
-          set +e
-          for test in findGitDirWalksUpFromNestedSubdirectory findGitDirReturnsNilWhenNoRepoPresent readBranchFromHeadOnBranch readBranchFromDetachedHead readBranchFollowsWorktreeGitdirFile readBranchFollowsRelativeSubmoduleGitdir; do
-            swift test --skip-build --filter "GitProjectResolverTests/${test}" > out.txt 2>&1
-            echo "--- ${test}: exit $?"
-            grep -E "Test run with|signal|Fatal|error" out.txt | tail -3
-          done

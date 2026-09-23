@@ -96,4 +96,12 @@ struct GitProjectResolverTests {
 
         #expect(GitProjectResolver.readBranch(gitDir: gitFile) == "sub-branch")
     }
+
+    /// The walk must terminate at "/" -- it used to loop forever on Foundation
+    /// versions where the parent of "/" is "/..".
+    @Test func findGitDirTerminatesAtRootAndOnRelativePaths() {
+        #expect(GitProjectResolver.findGitDir(startingAt: "/") == nil || FileManager.default.fileExists(atPath: "/.git"))
+        _ = GitProjectResolver.findGitDir(startingAt: "relative/path")
+        _ = GitProjectResolver.findGitDir(startingAt: "")
+    }
 }
