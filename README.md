@@ -4,7 +4,7 @@ A native macOS menu bar app for tracking local port usage — see what's listeni
 
 Showcase website: **[hellohopper.github.io/portly](https://hellohopper.github.io/portly/)**
 
-![Portly screenshot](docs/assets/screenshot.png)
+<img src="docs/assets/screenshot.png" width="426" alt="Portly's menu bar panel: a pinned Vite server, projects grouped with their git branch, HTTP status and LAN badges, CPU/memory with throughput and memory-trend sparklines, and per-project restart/stop buttons">
 
 ## Features
 
